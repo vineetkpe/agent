@@ -1,20 +1,172 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Fragment+Mono&family=Outfit:wght@300;400;600;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f4f5; /* zinc-100 */
+  --foreground: #09090b; /* zinc-950 */
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --border: #e4e4e7; /* zinc-200 */
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --glow-color: rgba(139, 92, 246, 0.05);
+  --glow-color-active: rgba(139, 92, 246, 0.15);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  
+  --font-sans: 'Outfit', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Fragment Mono', var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Handwritten class mapping */
+.font-caveat {
+  font-family: 'Caveat', 'Comic Sans MS', cursive;
+}
+
+/* Custom scrollbar matching active theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* Custom animation keyframes and classes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px 2px var(--glow-color);
+  }
+  50% {
+    box-shadow: 0 0 25px 6px var(--glow-color-active);
+  }
+}
+
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Gentle floating float keyframes for Teak-style network nodes */
+@keyframes floatNode1 {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  50% { transform: translateY(-10px) translateX(4px); }
+}
+
+@keyframes floatNode2 {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  50% { transform: translateY(12px) translateX(-6px); }
+}
+
+@keyframes floatNode3 {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  50% { transform: translateY(-8px) translateX(-4px); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+.animate-gradient-move {
+  background-size: 200% 200%;
+  animation: gradientMove 6s ease infinite;
+}
+
+/* Floating animation hooks */
+.animate-float-1 {
+  animation: floatNode1 4s infinite ease-in-out;
+}
+
+.animate-float-2 {
+  animation: floatNode2 4.5s infinite ease-in-out;
+}
+
+.animate-float-3 {
+  animation: floatNode3 3.8s infinite ease-in-out;
+}
+
+/* Custom Glassmorphism styles */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Teak-style retro grid utility */
+.retro-grid {
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
+/* Retro flat shadow borders */
+.shadow-retro-sm {
+  box-shadow: 2px 2px 0px 0px var(--border);
+}
+
+.shadow-retro-md {
+  box-shadow: 4px 4px 0px 0px var(--border);
+}
+
+.shadow-retro-primary {
+  box-shadow: 4px 4px 0px 0px #8b5cf6;
+}
+
+/* Hot-reload trigger comment */
