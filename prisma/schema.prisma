@@ -1,0 +1,60 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  stripeCustomerId String?
+  subscriptionActive Boolean @default(false)
+  createdAt        DateTime  @default(now())
+  sites            Site[]
+}
+
+model Site {
+  id                    String      @id @default(uuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url                   String
+  wpUrl                 String?
+  wpUsername            String?
+  wpAppPasswordEncrypted String?    // Encrypted application password
+  createdAt             DateTime    @default(now())
+  audits                Audit[]
+  auditItems            AuditItem[]
+}
+
+model Audit {
+  id               String      @id @default(uuid())
+  siteId           String
+  site             Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  scorePerformance Int         @default(0)
+  scoreSeo         Int         @default(0)
+  status           String      @default("pending") // pending, completed, failed
+  createdAt        DateTime    @default(now())
+  items            AuditItem[]
+}
+
+model AuditItem {
+  id             String    @id @default(uuid())
+  auditId        String
+  audit          Audit     @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  siteId         String
+  site           Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type           String    // "meta_title" | "meta_description" | "blog_post" | "broken_link" | "missing_alt" | "schema_markup"
+  targetUrl      String
+  currentValue   String?   // Store HTML, text or json
+  suggestedValue String?   // Store recommended title, content, etc.
+  status         String    @default("pending") // pending | approved | rejected | applied
+  appliedAt      DateTime?
+  errorMessage   String?
+  createdAt      DateTime  @default(now())
+}
