@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getOrCreateDefaultUser } from "@/lib/user";
+import { getCurrentUser } from "@/lib/user";
 import { prisma } from "@/lib/prisma";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -11,14 +11,26 @@ const stripe = !isMock ? new Stripe(stripeSecret!, { apiVersion: "2025-01-27.acc
 
 export async function POST(req: Request) {
   try {
-    const defaultUser = await getOrCreateDefaultUser();
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
     if (isMock || !stripe) {
-      console.log("[Stripe Checkout] Simulating Stripe Checkout subscription flow (Mock Mode).");
+      // SAFETY-1: Stripe mock-mode must fail loudly in production instead of granting free access
+      if (process.env.NODE_ENV === "production") {
+        console.error("[Stripe Checkout] Attempted to run mock billing subscription checkout in production mode!");
+        return NextResponse.json(
+          { error: "Stripe integration keys are misconfigured on this server." },
+          { status: 500 }
+        );
+      }
+
+      console.log(`[Stripe Checkout] Simulating Stripe Checkout subscription flow for dev user ${currentUser.email} (Mock Mode).`);
       
       // Mock flow: immediately toggle subscriptionActive to true in local SQLite DB
       await prisma.user.update({
-        where: { id: defaultUser.id },
+        where: { id: currentUser.id },
         data: { subscriptionActive: true },
       });
 
@@ -29,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     // Live Stripe Integration Flow
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3050";
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -50,11 +62,11 @@ export async function POST(req: Request) {
         },
       ],
       mode: "subscription",
-      customer_email: defaultUser.email,
+      customer_email: currentUser.email,
       success_url: `${appUrl}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/#pricing`,
       metadata: {
-        userId: defaultUser.id,
+        userId: currentUser.id,
       },
     });
 

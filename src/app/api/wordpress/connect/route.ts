@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { verifyWpConnection, normalizeWpUrl } from "@/lib/wordpress";
 import { encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateDefaultUser } from "@/lib/user";
+import { getCurrentUser } from "@/lib/user";
+import { isSafeUrlToFetch } from "@/lib/urlSafety";
 
 export async function POST(req: Request) {
   try {
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const { wpUrl, username, appPassword, siteUrl } = await req.json();
 
     if (!wpUrl || !username || !appPassword || !siteUrl) {
@@ -17,6 +23,21 @@ export async function POST(req: Request) {
 
     const normalizedWpUrl = normalizeWpUrl(wpUrl);
     
+    // Normalize target siteUrl origin (BUG-3 URL consistency)
+    let targetSiteUrl = siteUrl.trim();
+    if (!/^https?:\/\//i.test(targetSiteUrl)) {
+      targetSiteUrl = "https://" + targetSiteUrl;
+    }
+    const normalizedSiteUrl = new URL(targetSiteUrl).origin;
+
+    // SSRF Checks (SEC-2 SSRF protection)
+    if (!(await isSafeUrlToFetch(normalizedWpUrl)) || !(await isSafeUrlToFetch(normalizedSiteUrl))) {
+      return NextResponse.json(
+        { error: "Unsafe website or WordPress URL endpoint provided." },
+        { status: 400 }
+      );
+    }
+    
     // 1. Verify connection to WordPress REST API
     const isConnected = await verifyWpConnection(normalizedWpUrl, username, appPassword);
     if (!isConnected) {
@@ -26,17 +47,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Fetch or create our default workspace user
-    const defaultUser = await getOrCreateDefaultUser();
-
     // 3. Encrypt the application password
     const encryptedPassword = encrypt(appPassword);
 
     // 4. Update or Create the Site record with WordPress connection info
     let site = await prisma.site.findFirst({
       where: {
-        userId: defaultUser.id,
-        url: siteUrl,
+        userId: currentUser.id,
+        url: normalizedSiteUrl,
       },
     });
 
@@ -52,8 +70,8 @@ export async function POST(req: Request) {
     } else {
       site = await prisma.site.create({
         data: {
-          userId: defaultUser.id,
-          url: siteUrl,
+          userId: currentUser.id,
+          url: normalizedSiteUrl,
           wpUrl: normalizedWpUrl,
           wpUsername: username,
           wpAppPasswordEncrypted: encryptedPassword,

@@ -1,18 +1,18 @@
 import crypto from "crypto";
 
-// Ensure the encryption key is a 32-byte hex string (64 characters)
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "";
+
+// Validate encryption key length and structure immediately on module load
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.trim() === "" || !/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
+  throw new Error("ENCRYPTION_KEY env variable must be a 64-character hex string (32 bytes)");
+}
+
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // GCM standard IV length
 
 export function encrypt(text: string): string {
   if (!text) return "";
   
-  // Validate encryption key length
-  if (ENCRYPTION_KEY.length !== 64) {
-    throw new Error("ENCRYPTION_KEY env variable must be a 64-character hex string (32 bytes)");
-  }
-
   const key = Buffer.from(ENCRYPTION_KEY, "hex");
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -28,11 +28,6 @@ export function encrypt(text: string): string {
 
 export function decrypt(encryptedText: string): string {
   if (!encryptedText) return "";
-
-  // Validate encryption key length
-  if (ENCRYPTION_KEY.length !== 64) {
-    throw new Error("ENCRYPTION_KEY env variable must be a 64-character hex string (32 bytes)");
-  }
 
   const key = Buffer.from(ENCRYPTION_KEY, "hex");
   const parts = encryptedText.split(":");

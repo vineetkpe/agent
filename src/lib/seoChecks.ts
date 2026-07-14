@@ -1,4 +1,5 @@
 import { CrawledPage } from "./crawler";
+import { isSafeUrlToFetch } from "./urlSafety";
 
 export interface AuditResults {
   scorePerformance: number;
@@ -13,6 +14,12 @@ export interface AuditResults {
 
 // Simple link checker helper
 async function checkLink(url: string): Promise<{ url: string; isBroken: boolean; statusCode?: number }> {
+  // SSRF Check
+  if (!(await isSafeUrlToFetch(url))) {
+    console.log(`[SEO Checks] Skipping unsafe link check: ${url}`);
+    return { url, isBroken: true };
+  }
+
   try {
     const response = await fetch(url, {
       method: "HEAD",
@@ -49,6 +56,12 @@ async function checkLink(url: string): Promise<{ url: string; isBroken: boolean;
 
 // Fetch PageSpeed performance score
 async function getPageSpeedScore(url: string): Promise<number> {
+  // SSRF Check for PageSpeed URL targets (must be safe)
+  if (!(await isSafeUrlToFetch(url))) {
+    console.log(`[PageSpeed] Skipping PageSpeed check for unsafe URL: ${url}`);
+    return 50;
+  }
+
   const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY;
   if (!apiKey || apiKey === "mock-gemini-key" || apiKey === "mock-pagespeed-key") {
     console.log("[PageSpeed] Using mock PageSpeed score (no valid API key).");
@@ -152,11 +165,9 @@ export async function runSeoAudits(pages: CrawledPage[], seedUrl: string): Promi
   }
 
   // 2. Broken Link Checker
-  // Extract all unique links across all pages
   const allLinks = new Set<string>();
   for (const page of pages) {
     page.externalLinks.forEach(link => allLinks.add(link));
-    // For V1, we also verify internal links
     page.internalLinks.forEach(link => allLinks.add(link));
   }
 

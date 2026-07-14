@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { isSafeUrlToFetch } from "./urlSafety";
 
 export interface CrawledPage {
   url: string;
@@ -27,6 +28,12 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
   const origin = parsedStartUrl.origin;
   const hostname = parsedStartUrl.hostname;
   
+  // Verify safety of seed URL
+  if (!(await isSafeUrlToFetch(parsedStartUrl.toString()))) {
+    console.log(`[Crawler] Skipping unsafe start URL: ${parsedStartUrl.toString()}`);
+    return [];
+  }
+  
   queue.push(parsedStartUrl.toString());
 
   while (queue.length > 0 && crawled.size < maxPages) {
@@ -38,6 +45,12 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
     const cleanUrlStr = normalizedUrl.toString();
 
     if (crawled.has(cleanUrlStr)) {
+      continue;
+    }
+
+    // SSRF Check
+    if (!(await isSafeUrlToFetch(cleanUrlStr))) {
+      console.log(`[Crawler] Skipping unsafe URL during crawl loop: ${cleanUrlStr}`);
       continue;
     }
 
@@ -120,7 +133,9 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
                               pathname.endsWith(".pdf") || pathname.endsWith(".zip") || 
                               pathname.endsWith(".css") || pathname.endsWith(".js") ||
                               pathname.endsWith(".xml");
-              if (!isAsset) {
+              
+              // Bounded queue size check
+              if (!isAsset && queue.length < maxPages * 10) {
                 queue.push(absStr);
               }
             }
@@ -146,7 +161,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
 
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${cleanUrlStr}:`, error);
-      // Still log as failed or skip
     }
   }
 

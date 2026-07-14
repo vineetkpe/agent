@@ -119,6 +119,16 @@ function generateMockJson<T>(prompt: string): T {
             "logo": "https://example.com/logo.png",
             "description": "Premium local maintenance and support services for residential and commercial spaces."
           }, null, 2)
+        },
+        {
+          targetUrl: "https://example.com/",
+          type: "missing_alt",
+          suggestedValue: "Team of local maintenance professionals repairing a residential pipeline system"
+        },
+        {
+          targetUrl: "https://example.com/",
+          type: "broken_link",
+          suggestedValue: "Update broken link endpoint to target https://example.com/contact-us"
         }
       ],
       blogPosts: [

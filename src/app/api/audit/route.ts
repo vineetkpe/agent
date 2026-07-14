@@ -3,7 +3,8 @@ import { crawlSite } from "@/lib/crawler";
 import { runSeoAudits } from "@/lib/seoChecks";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateDefaultUser } from "@/lib/user";
+import { getCurrentUser } from "@/lib/user";
+import { isSafeUrlToFetch } from "@/lib/urlSafety";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -15,7 +16,7 @@ const geminiResponseSchema = {
         type: "OBJECT",
         properties: {
           targetUrl: { type: "STRING" },
-          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup"] },
+          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link"] },
           suggestedValue: { type: "STRING" },
         },
         required: ["targetUrl", "type", "suggestedValue"],
@@ -37,11 +38,15 @@ const geminiResponseSchema = {
   required: ["fixes", "blogPosts"],
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const defaultUser = await getOrCreateDefaultUser();
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const site = await prisma.site.findFirst({
-      where: { userId: defaultUser.id },
+      where: { userId: currentUser.id },
       select: {
         id: true,
         url: true,
@@ -67,8 +72,8 @@ export async function GET() {
       site,
       audit: latestAudit,
       user: {
-        email: defaultUser.email,
-        subscriptionActive: defaultUser.subscriptionActive,
+        email: currentUser.email,
+        subscriptionActive: currentUser.subscriptionActive,
       },
     });
   } catch (error: any) {
@@ -82,6 +87,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const { url } = await req.json();
     if (!url) {
       return NextResponse.json({ error: "Missing website URL parameter" }, { status: 400 });
@@ -94,15 +104,17 @@ export async function POST(req: Request) {
     }
     const cleanUrl = new URL(targetUrl).origin;
 
-    console.log(`[Audit Route] Starting audit pipeline for: ${cleanUrl}`);
+    // SSRF Check on audit start
+    if (!(await isSafeUrlToFetch(cleanUrl))) {
+      return NextResponse.json({ error: "Unsafe website URL provided." }, { status: 400 });
+    }
 
-    // 1. Fetch or create default user
-    const defaultUser = await getOrCreateDefaultUser();
+    console.log(`[Audit Route] Starting audit pipeline for user ${currentUser.email} on: ${cleanUrl}`);
 
     // 2. Fetch or create Site
     let site = await prisma.site.findFirst({
       where: {
-        userId: defaultUser.id,
+        userId: currentUser.id,
         url: cleanUrl,
       },
     });
@@ -110,7 +122,7 @@ export async function POST(req: Request) {
     if (!site) {
       site = await prisma.site.create({
         data: {
-          userId: defaultUser.id,
+          userId: currentUser.id,
           url: cleanUrl,
         },
       });
@@ -165,16 +177,19 @@ ${JSON.stringify(
 )}
 
 Based on this audit data, please generate:
-1. Exact fix suggestions for each page with a 'meta_title' or 'meta_description' or 'schema_markup' issue.
+1. Exact fix suggestions for each page with a 'meta_title' or 'meta_description' or 'schema_markup' or 'missing_alt' or 'broken_link' issue.
    - For 'meta_title' issues: Provide an optimized title tag between 30 and 60 characters.
    - For 'meta_description' issues: Provide an optimized meta description between 120 and 160 characters.
    - For 'schema_markup' issues: Provide a valid schema.org LocalBusiness or Article JSON-LD markup string.
+   - For 'missing_alt' issues: Provide an optimized alt text suggestion for the image.
+   - For 'broken_link' issues: Provide a recommended action or a suggested replacement URL if obvious from context.
+   Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly.
 2. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->).
 
 Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 {
   "fixes": [
-    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup", "suggestedValue": "string" }
+    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link", "suggestedValue": "string" }
   ],
   "blogPosts": [
     { "title": "string", "content": "string", "suggestedSlug": "string" }
@@ -190,7 +205,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     // 7. Save pending items to the database
     const savedItems = [];
 
-    // Save Page/Meta Fixes
+    // Save Page/Meta/Alt/Link Fixes
     if (aiResponse.fixes && aiResponse.fixes.length > 0) {
       for (const fix of aiResponse.fixes) {
         // Find corresponding issue current value

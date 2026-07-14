@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { publishWpPost } from "@/lib/wordpress";
+import { getCurrentUser } from "@/lib/user";
 
 export async function POST(req: Request) {
   try {
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const { itemId, action } = await req.json();
 
     if (!itemId || !action) {
@@ -22,7 +28,13 @@ export async function POST(req: Request) {
     });
 
     if (!item) {
-      return NextResponse.json({ error: "Audit item not found" }, { status: 444 });
+      return NextResponse.json({ error: "Audit item not found" }, { status: 404 });
+    }
+
+    // 2. Security Check: Ownership verification
+    if (item.site.userId !== currentUser.id) {
+      console.error(`[Security Alert] User ${currentUser.email} attempted unauthorized access to item ${itemId} belonging to userId ${item.site.userId}`);
+      return NextResponse.json({ error: "Forbidden: You do not own this site resource." }, { status: 403 });
     }
 
     if (action === "reject") {
@@ -34,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     // Action is "approve"
-    // 2. Process based on item type
+    // 3. Process based on item type
     if (item.type === "blog_post") {
       const postData = JSON.parse(item.suggestedValue || "{}");
       const site = item.site;

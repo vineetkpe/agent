@@ -1,8 +1,21 @@
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "./prisma";
 
+// Mock global WebSocket for Node.js < 22 environments to satisfy Supabase Realtime checks
+if (typeof global.WebSocket === "undefined") {
+  (global as any).WebSocket = class {};
+}
+
+// Fallback to valid mock URL string format to prevent build evaluation crash
+const supabaseUrl = process.env.SUPABASE_URL || "https://mock-supabase-url.supabase.co";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "mock-anon-key";
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 /**
+ * DEV-ONLY / Local-Testing Helper.
  * Fetches the first user in the database or creates a default user "user@example.com"
- * to simplify local development and direct dashboard testing.
+ * to simplify local development and direct dashboard testing when Supabase Auth is not configured.
  */
 export async function getOrCreateDefaultUser() {
   try {
@@ -14,11 +27,106 @@ export async function getOrCreateDefaultUser() {
           subscriptionActive: true, // Make active for full dashboard testing
         },
       });
-      console.log(`[User Service] Created default user: ${user.email}`);
+      console.log(`[User Service] [DEV-ONLY] Created default user: ${user.email}`);
     }
     return user;
   } catch (error) {
-    console.error("[User Service] Failed to get or create default user:", error);
+    console.error("[User Service] [DEV-ONLY] Failed to get or create default user:", error);
     throw error;
+  }
+}
+
+/**
+ * Returns the authenticated User row from Prisma by reading the Supabase session token
+ * from the request's Authorization header or Cookies.
+ * Creates a database User row on first login if it does not exist.
+ */
+export async function getCurrentUser(req: Request) {
+  let token = "";
+
+  // 1. Check Authorization Header
+  const authHeader = req.headers.get("authorization");
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    token = authHeader.substring(7);
+  } else {
+    // 2. Check Cookies
+    const cookieHeader = req.headers.get("cookie") || "";
+    const cookies = cookieHeader.split(";").map(c => c.trim());
+    for (const cookie of cookies) {
+      const [name, val] = cookie.split("=");
+      if (name && val && (name.includes("auth-token") || name.includes("access-token") || name === "sb-token")) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(val));
+          if (parsed && typeof parsed === "object") {
+            token = parsed.access_token || parsed.token || token;
+          } else {
+            token = decodeURIComponent(val);
+          }
+        } catch {
+          token = decodeURIComponent(val);
+        }
+        break;
+      }
+    }
+  }
+
+  // 3. Fallback for Local Dev / Testing if no token is found and Supabase keys are not fully set
+  if (!token) {
+    if (process.env.NODE_ENV !== "production") {
+      if (!process.env.SUPABASE_URL || process.env.SUPABASE_URL === "mock-supabase-url" || process.env.SUPABASE_URL.startsWith("mock")) {
+        console.log("[Auth] [DEV-ONLY] No session token found. Using dev-only default user fallback.");
+        return await getOrCreateDefaultUser();
+      }
+    }
+    return null;
+  }
+
+  try {
+    // 4. Validate session with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      console.error("[Auth] Supabase session validation failed:", error);
+      return null;
+    }
+
+    const email = user.email;
+    const userId = user.id;
+
+    if (!email) {
+      console.error("[Auth] Supabase user has no email.");
+      return null;
+    }
+
+    // 5. Look up or register the User in the local database
+    let dbUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: userId },
+          { email: email }
+        ]
+      }
+    });
+
+    if (!dbUser) {
+      dbUser = await prisma.user.create({
+        data: {
+          id: userId,
+          email: email,
+          subscriptionActive: false,
+        }
+      });
+      console.log(`[Auth] Registered new user in database: ${email}`);
+    } else if (dbUser.id !== userId) {
+      // If user exists with the same email but has a different ID (e.g. from local seed), align it
+      dbUser = await prisma.user.update({
+        where: { email: email },
+        data: { id: userId }
+      });
+    }
+
+    return dbUser;
+  } catch (err) {
+    console.error("[Auth] Error fetching current user session:", err);
+    return null;
   }
 }
