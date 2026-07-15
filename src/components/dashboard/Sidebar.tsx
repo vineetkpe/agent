@@ -56,8 +56,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <FileText className="w-4 h-4" />,
     },
     {
-      id: "cms",
-      label: "CMS Settings",
+      id: "connections",
+      label: "Connections",
       icon: <Settings className="w-4 h-4" />,
     },
   ];

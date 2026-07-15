@@ -57,7 +57,7 @@ export async function GET(req: Request) {
     });
 
     if (!site) {
-      return NextResponse.json({ site: null, audit: null });
+      return NextResponse.json({ site: null, audit: null, pastAudits: [] });
     }
 
     const latestAudit = await prisma.audit.findFirst({
@@ -68,9 +68,21 @@ export async function GET(req: Request) {
       },
     });
 
+    const pastAudits = await prisma.audit.findMany({
+      where: { siteId: site.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        scorePerformance: true,
+        scoreSeo: true,
+        createdAt: true,
+      },
+    });
+
     return NextResponse.json({
       site,
       audit: latestAudit,
+      pastAudits,
       user: {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,

@@ -1,28 +1,66 @@
 import React from "react";
-import { Sparkles, ArrowRight, Activity, Calendar, FileText, CheckCircle, Clock, XCircle, Zap } from "lucide-react";
+import { Sparkles, ArrowRight, Activity, Calendar } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
+import { ScoreTrendChart } from "./charts/ScoreTrendChart";
+import { IssueBreakdownChart } from "./charts/IssueBreakdownChart";
+import { ApprovalFunnelChart } from "./charts/ApprovalFunnelChart";
 
 interface OverviewTabProps {
   currentSite: any;
   currentAudit: any;
   selectTab: (tab: any) => void;
+  pastAudits?: any[];
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
   currentSite,
   currentAudit,
   selectTab,
+  pastAudits = [],
 }) => {
+  if (!currentAudit) {
+    return (
+      <div className="space-y-8 animate-slide-up">
+        <Card variant="shadow" className="max-w-2xl mx-auto text-center p-12 space-y-6 my-12">
+          <div className="w-16 h-16 rounded-full border-2 border-zinc-950 flex items-center justify-center mx-auto bg-violet-50 text-violet-600 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase font-mono">
+              Initialize Your AI Growth Routine
+            </h2>
+            <p className="text-sm text-zinc-600 max-w-md mx-auto leading-relaxed">
+              No SEO crawls or diagnostics audits have been executed for your site yet. Start now to analyze sitemaps, target keywords, and publish optimization tags.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <button
+              onClick={() => selectTab("crawler")}
+              type="button"
+              className="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm tracking-wider uppercase transition-all duration-200 border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_rgba(9,9,11,1)] flex items-center gap-2"
+            >
+              Run Your First Crawl <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const items = currentAudit?.items || [];
   const pendingCount = items.filter((i: any) => i.status === "pending").length;
   const approvedCount = items.filter((i: any) => i.status === "approved").length;
   const appliedCount = items.filter((i: any) => i.status === "applied").length;
-  const rejectedCount = items.filter((i: any) => i.status === "rejected").length;
 
-  const lastAuditDate = currentAudit?.createdAt
-    ? new Date(currentAudit.createdAt).toLocaleString()
-    : "No audits run yet";
+  // Sorting recent activity changes
+  const activityItems = [...items]
+    .sort((a: any, b: any) => {
+      const timeA = a.appliedAt ? new Date(a.appliedAt).getTime() : new Date(a.createdAt).getTime();
+      const timeB = b.appliedAt ? new Date(b.appliedAt).getTime() : new Date(b.createdAt).getTime();
+      return timeB - timeA;
+    })
+    .slice(0, 5);
 
   return (
     <div className="space-y-8 animate-slide-up">
@@ -32,9 +70,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-zinc-900">
             <Sparkles className="w-6 h-6 text-violet-500" /> HeyDrona AI Employee Workspace
           </h2>
-          <p className="text-xs mt-1 leading-relaxed text-zinc-600">
+          <p className="text-xs mt-1 leading-relaxed text-zinc-650">
             Connecting:{" "}
-            <span className="text-violet-600 font-mono font-bold">
+            <span className="text-violet-650 font-mono font-bold">
               {currentSite?.url || "No website connected yet"}
             </span>
             . Running autonomous digital growth routines daily.
@@ -51,119 +89,112 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </Card>
 
-      {/* Status Score Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        <Card variant="flat" className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wider font-bold block text-zinc-550">
-            SEO Health Index
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+        <Card variant="flat" className="flex flex-col p-4">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Total Issues Found
           </span>
-          <span className="text-4xl font-extrabold text-violet-600 mt-2 font-mono">
-            {currentAudit?.scoreSeo ? `${currentAudit.scoreSeo}%` : "--"}
-          </span>
-          <p className="text-[10px] text-zinc-500 mt-auto pt-4 leading-relaxed">
-            Percentage of standard header guidelines passed
-          </p>
-        </Card>
-
-        <Card variant="flat" className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wider font-bold block text-zinc-555">
-            Performance Index
-          </span>
-          <span className="text-4xl font-extrabold text-emerald-600 mt-2 font-mono">
-            {currentAudit?.scorePerformance ? `${currentAudit.scorePerformance}` : "--"}
-          </span>
-          <p className="text-[10px] text-zinc-500 mt-auto pt-4">
-            Tested page load parameters
-          </p>
-        </Card>
-
-        <Card variant="flat" className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wider font-bold block text-zinc-550">
-            Total Issues Flagged
-          </span>
-          <span className="text-4xl font-extrabold text-indigo-650 mt-2 font-mono">
+          <span className="text-2xl font-extrabold text-indigo-600 mt-1 font-mono">
             {items.length}
           </span>
-          <p className="text-[10px] text-zinc-500 mt-auto pt-4">
-            SEO recommendations and blog content drafts
-          </p>
         </Card>
 
-        <Card variant="flat" className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-wider font-bold block text-zinc-550">
-            Audit Date
+        <Card variant="flat" className="flex flex-col p-4">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Fixes Applied
           </span>
-          <span className="text-sm font-bold text-zinc-700 mt-4 leading-normal flex items-center gap-1.5 font-mono">
-            <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
-            {currentAudit?.createdAt
-              ? new Date(currentAudit.createdAt).toLocaleDateString()
-              : "--"}
+          <span className="text-2xl font-extrabold text-emerald-600 mt-1 font-mono">
+            {appliedCount}
           </span>
-          <p className="text-[10px] text-zinc-500 mt-auto pt-4">
-            Latest crawling timestamp
-          </p>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Fixes Pending Review
+          </span>
+          <span className="text-2xl font-extrabold text-amber-600 mt-1 font-mono">
+            {pendingCount}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Latest SEO Score
+          </span>
+          <span className="text-2xl font-extrabold text-violet-600 mt-1 font-mono">
+            {currentAudit?.scoreSeo ? `${currentAudit.scoreSeo}%` : "--"}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Latest Perf Score
+          </span>
+          <span className="text-2xl font-extrabold text-emerald-600 mt-1 font-mono">
+            {currentAudit?.scorePerformance ? `${currentAudit.scorePerformance}` : "--"}
+          </span>
         </Card>
       </div>
 
-      {/* Real Audit Task Summary Timeline */}
-      <Card variant="flat">
-        <div className="pb-6 border-b border-zinc-100">
-          <h3 className="text-lg font-bold flex items-center gap-2 text-zinc-900">
-            <Activity className="w-5 h-5 text-violet-600" /> SEO Optimization Summary
+      {/* Two Column Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ScoreTrendChart pastAudits={pastAudits} />
+        <IssueBreakdownChart items={items} />
+      </div>
+
+      {/* Funnel Chart Row */}
+      <ApprovalFunnelChart items={items} />
+
+      {/* Recent Activity List */}
+      <Card variant="flat" className="space-y-4">
+        <div>
+          <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">
+            Recent Activity
           </h3>
-          <p className="text-xs mt-0.5 text-zinc-500">
-            Current status of audit tasks pulled from database audit record ({lastAuditDate}).
-          </p>
+          <p className="text-xs text-zinc-400">Last 5 updates for this website</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
-          <div className="p-4 border rounded-xl bg-zinc-50 border-zinc-200">
-            <div className="flex items-center gap-2 text-amber-600 mb-1.5">
-              <Clock className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Pending Review
-              </span>
-            </div>
-            <span className="text-2xl font-black text-zinc-800 font-mono">
-              {pendingCount}
-            </span>
-          </div>
+        <div className="space-y-3">
+          {activityItems.length === 0 ? (
+            <p className="text-xs text-zinc-500 italic py-2">No activity recorded yet.</p>
+          ) : (
+            activityItems.map((item: any) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-3 border rounded-xl bg-zinc-50/50 border-zinc-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-zinc-800 font-mono">
+                      {item.type.replace("_", " ").toUpperCase()}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[200px] sm:max-w-md">
+                      {item.targetUrl}
+                    </span>
+                  </div>
+                </div>
 
-          <div className="p-4 border rounded-xl bg-zinc-50 border-zinc-200">
-            <div className="flex items-center gap-2 text-emerald-600 mb-1.5">
-              <CheckCircle className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Approved
-              </span>
-            </div>
-            <span className="text-2xl font-black text-zinc-800 font-mono">
-              {approvedCount}
-            </span>
-          </div>
-
-          <div className="p-4 border rounded-xl bg-zinc-50 border-zinc-200">
-            <div className="flex items-center gap-2 text-indigo-600 mb-1.5">
-              <Zap className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Pushed/Applied
-              </span>
-            </div>
-            <span className="text-2xl font-black text-zinc-800 font-mono">
-              {appliedCount}
-            </span>
-          </div>
-
-          <div className="p-4 border rounded-xl bg-zinc-50 border-zinc-200">
-            <div className="flex items-center gap-2 text-zinc-550 mb-1.5">
-              <XCircle className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Rejected
-              </span>
-            </div>
-            <span className="text-2xl font-black text-zinc-800 font-mono">
-              {rejectedCount}
-            </span>
-          </div>
+                <div className="text-right flex flex-col items-end justify-center">
+                  {item.status === "applied" && (
+                    <Badge variant="emerald" className="text-[8px] px-1.5 py-0.5">Live</Badge>
+                  )}
+                  {item.status === "approved" && (
+                    <Badge variant="amber" className="text-[8px] px-1.5 py-0.5">Approved</Badge>
+                  )}
+                  {item.status === "rejected" && (
+                    <Badge variant="zinc" className="text-[8px] px-1.5 py-0.5">Rejected</Badge>
+                  )}
+                  {item.status === "pending" && (
+                    <Badge variant="violet" className="text-[8px] px-1.5 py-0.5">Pending</Badge>
+                  )}
+                  <span className="text-[9px] text-zinc-400 font-mono block mt-1">
+                    {new Date(item.appliedAt || item.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </div>

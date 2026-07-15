@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, XCircle, Clock, Copy, Check, Zap, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Copy, Check, Zap, AlertTriangle, Clipboard, ExternalLink } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -9,6 +9,7 @@ interface RecommendationsTabProps {
   handleActionItem: (itemId: string, action: "approve" | "reject") => void;
   handleCopyText: (text: string, id: string) => void;
   copiedId: string | null;
+  currentSite?: any;
 }
 
 const getRecommendationDetails = (type: string) => {
@@ -63,6 +64,7 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
   handleActionItem,
   handleCopyText,
   copiedId,
+  currentSite,
 }) => {
   const metaFixes =
     currentAudit?.items?.filter((item: any) =>
@@ -112,14 +114,35 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {isApplied && (
-                      <Badge variant="emerald">
-                        <CheckCircle className="w-3.5 h-3.5" /> Pushed Draft
-                      </Badge>
-                    )}
+                    {isApplied && (() => {
+                      let wpLink = "";
+                      if (item.suggestedValue) {
+                        try {
+                          const parsed = JSON.parse(item.suggestedValue);
+                          wpLink = parsed.wpLink || "";
+                        } catch (e) {}
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="emerald">
+                            Live on Site
+                          </Badge>
+                          {wpLink && (
+                            <a
+                              href={wpLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 font-semibold font-mono underline"
+                            >
+                              <ExternalLink className="w-3 h-3" /> View
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {isApproved && (
-                      <Badge variant="emerald">
-                        <CheckCircle className="w-3.5 h-3.5" /> Approved
+                      <Badge variant="amber">
+                        <Clipboard className="w-3.5 h-3.5" /> Action Required: Copy & Paste
                       </Badge>
                     )}
                     {isRejected && (
@@ -213,40 +236,72 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                   </div>
                 </div>
 
-                {/* One-Click Fix Action Bar */}
-                {item.status === "pending" && (
-                  <div className="flex gap-2 justify-end pt-2 border-t border-zinc-100">
-                    <Button variant="secondary" onClick={() => handleActionItem(item.id, "reject")}>
-                      Reject Fix
-                    </Button>
-                    <Button variant="primary" onClick={() => handleActionItem(item.id, "approve")}>
-                      <Zap className="w-3.5 h-3.5" /> One-Click Fix
-                    </Button>
+                {/* WordPress push failure callout */}
+                {item.errorMessage && (
+                  <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-750 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold uppercase tracking-wider text-[9px] text-red-800 font-mono">Publishing Failed</p>
+                      <p className="mt-0.5 leading-relaxed">{item.errorMessage}</p>
+                    </div>
                   </div>
                 )}
 
+                {/* One-Click Fix Action Bar */}
+                {item.status === "pending" && (() => {
+                  const isWpConnected = !!currentSite?.wpUrl;
+                  const isBlogPost = item.type === "blog_post";
+                  const canAutoApply = isBlogPost && isWpConnected;
+
+                  return (
+                    <div className="flex gap-2 justify-end pt-2 border-t border-zinc-100">
+                      <Button variant="secondary" onClick={() => handleActionItem(item.id, "reject")}>
+                        Reject Fix
+                      </Button>
+                      <Button variant="primary" onClick={() => handleActionItem(item.id, "approve")}>
+                        {canAutoApply ? (
+                          <>
+                            <Zap className="w-3.5 h-3.5" /> Publish to WordPress
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" /> Approve & Copy Fix
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })()}
+
                 {/* If approved/applied, show integration copying option */}
                 {(isApproved || isApplied) && (
-                  <div className="p-3 rounded-xl border flex items-center justify-between text-xs transition-all bg-zinc-50 border-zinc-200">
-                    <code className="text-xs font-mono truncate max-w-lg text-zinc-650">
-                      {item.type === "schema_markup"
-                        ? item.suggestedValue.substring(0, 100) + "..."
-                        : item.suggestedValue}
-                    </code>
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleCopyText(item.suggestedValue, item.id + "-approved")}
-                    >
-                      {copiedId === item.id + "-approved" ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied Code
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" /> Copy Snippet
-                        </>
-                      )}
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="p-3 rounded-xl border flex items-center justify-between text-xs transition-all bg-zinc-50 border-zinc-200">
+                      <code className="text-xs font-mono truncate max-w-lg text-zinc-650">
+                        {item.type === "schema_markup"
+                          ? item.suggestedValue.substring(0, 100) + "..."
+                          : item.suggestedValue}
+                      </code>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleCopyText(item.suggestedValue, item.id + "-approved")}
+                      >
+                        {copiedId === item.id + "-approved" ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied Code
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" /> Copy Snippet
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {isApproved && (
+                      <p className="text-[11px] text-zinc-500 italic px-1">
+                        This site isn&apos;t connected to WordPress (or this fix type requires manual placement) &mdash; copy the snippet below and add it to your site.
+                      </p>
+                    )}
                   </div>
                 )}
               </Card>

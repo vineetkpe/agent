@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type TabType = "overview" | "crawler" | "recommendations" | "content" | "cms";
+export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections";
 
 export function useDashboardData() {
   const [siteUrl, setSiteUrl] = useState("");
@@ -9,6 +9,7 @@ export function useDashboardData() {
   const [crawlStep, setCrawlStep] = useState("");
   const [currentSite, setCurrentSite] = useState<any>(null);
   const [currentAudit, setCurrentAudit] = useState<any>(null);
+  const [pastAudits, setPastAudits] = useState<any[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [wpUrl, setWpUrl] = useState("");
@@ -63,6 +64,9 @@ export function useDashboardData() {
         }
         if (data.audit) {
           setCurrentAudit(data.audit);
+        }
+        if (data.pastAudits) {
+          setPastAudits(data.pastAudits);
         }
         if (data.user) {
           setCurrentUser(data.user);
@@ -279,5 +283,6 @@ export function useDashboardData() {
     handleRunAudit,
     handleConnectCMS,
     handleActionItem,
+    pastAudits,
   };
 }

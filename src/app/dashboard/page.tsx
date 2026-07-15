@@ -9,7 +9,7 @@ import { OverviewTab } from "@/components/dashboard/OverviewTab";
 import { CrawlerTab } from "@/components/dashboard/CrawlerTab";
 import { RecommendationsTab } from "@/components/dashboard/RecommendationsTab";
 import { ContentTab } from "@/components/dashboard/ContentTab";
-import { CmsSettingsTab } from "@/components/dashboard/CmsSettingsTab";
+import { ConnectionsTab } from "@/components/dashboard/ConnectionsTab";
 import { ChevronRight, Menu } from "lucide-react";
 
 export default function DashboardPage() {
@@ -93,7 +93,7 @@ export default function DashboardPage() {
             <span className="text-sm hidden md:inline text-zinc-400 font-mono uppercase tracking-wider">Workspace</span>
             <ChevronRight className="w-4 h-4 hidden md:inline text-zinc-300" />
             <span className="text-sm font-semibold capitalize text-zinc-850 font-mono">
-              {data.activeTab === "cms" ? "CMS Settings" : data.activeTab}
+              {data.activeTab === "connections" ? "Connections" : data.activeTab}
             </span>
           </div>
 
@@ -132,6 +132,7 @@ export default function DashboardPage() {
               currentSite={data.currentSite}
               currentAudit={data.currentAudit}
               selectTab={data.selectTab}
+              pastAudits={data.pastAudits}
             />
           )}
 
@@ -155,6 +156,7 @@ export default function DashboardPage() {
               handleActionItem={data.handleActionItem}
               handleCopyText={data.handleCopyText}
               copiedId={data.copiedId}
+              currentSite={data.currentSite}
             />
           )}
 
@@ -169,8 +171,8 @@ export default function DashboardPage() {
             />
           )}
 
-          {data.activeTab === "cms" && (
-            <CmsSettingsTab
+          {data.activeTab === "connections" && (
+            <ConnectionsTab
               handleConnectCMS={data.handleConnectCMS}
               wpUrl={data.wpUrl}
               setWpUrl={data.setWpUrl}
