@@ -15,6 +15,7 @@ model User {
   email            String    @unique
   stripeCustomerId String?
   subscriptionActive Boolean @default(false)
+  isAdmin          Boolean   @default(false)
   createdAt        DateTime  @default(now())
   sites            Site[]
 }
@@ -58,3 +59,13 @@ model AuditItem {
   errorMessage   String?
   createdAt      DateTime  @default(now())
 }
+
+model ApiUsageLog {
+  id        String   @id @default(uuid())
+  provider  String   // e.g. 'gemini'/'openrouter'/'groq'
+  callType  String   // 'generateContent'/'generateStructuredJson'
+  success   Boolean
+  userId    String?
+  createdAt DateTime @default(now())
+}
+

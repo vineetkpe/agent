@@ -3,6 +3,7 @@ import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, M
 import { TabType } from "@/hooks/useDashboardData";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BillingUpgradeBanner } from "./BillingUpgradeBanner";
 
 interface SidebarProps {
@@ -113,6 +114,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {item.label}
             </button>
           ))}
+
+          {currentUser?.isAdmin && (
+            <Link
+              href="/admin"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 border text-zinc-550 hover:bg-zinc-100 hover:text-zinc-900 border-transparent"
+            >
+              <Settings className="w-4 h-4 text-violet-500" />
+              Admin Panel
+            </Link>
+          )}
         </nav>
 
         {/* Pricing / Status Upgrade */}

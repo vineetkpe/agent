@@ -74,6 +74,7 @@ export async function GET(req: Request) {
       user: {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,
+        isAdmin: currentUser.isAdmin,
       },
     });
   } catch (error: any) {
@@ -200,7 +201,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     const aiResponse = await generateStructuredJson<{
       fixes: { targetUrl: string; type: string; suggestedValue: string }[];
       blogPosts: { title: string; content: string; suggestedSlug: string }[];
-    }>(systemPrompt, geminiResponseSchema);
+    }>(systemPrompt, geminiResponseSchema, currentUser.id);
 
     // 7. Save pending items to the database
     const savedItems = [];

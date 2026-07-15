@@ -102,10 +102,24 @@ export async function getCurrentUser(req: Request) {
       });
     }
 
+    // 5. Grant admin access via ADMIN_EMAILS if configured
+    const adminEmailsEnv = process.env.ADMIN_EMAILS || "";
+    const adminEmails = adminEmailsEnv.split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) {
+      if (!dbUser.isAdmin) {
+        dbUser = await prisma.user.update({
+          where: { id: dbUser.id },
+          data: { isAdmin: true }
+        });
+        console.log(`[Auth] Granted admin access to: ${dbUser.email}`);
+      }
+    }
+
     return dbUser;
   } catch (err) {
     console.error("[Auth] Error fetching current user session:", err);
     return null;
   }
 }
+
 

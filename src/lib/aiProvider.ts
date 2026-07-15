@@ -1,59 +1,104 @@
-import { GoogleGenAI } from "@google/genai";
+import * as geminiProvider from "./aiProviders/gemini";
+import * as groqProvider from "./aiProviders/groq";
+import * as openrouterProvider from "./aiProviders/openrouter";
+import { prisma } from "./prisma";
 
-const apiKey = process.env.GEMINI_API_KEY;
-const isMock = !apiKey || apiKey === "mock-gemini-key";
+const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
 
-// Initialize Gemini client if a real key is present
-const ai = !isMock ? new GoogleGenAI({ apiKey }) : null;
-const MODEL_NAME = "gemini-2.5-flash";
+const isMock = (() => {
+  if (provider === "groq") {
+    const key = process.env.GROQ_API_KEY;
+    return !key || key === "mock-groq-key";
+  }
+  if (provider === "openrouter") {
+    const key = process.env.OPENROUTER_API_KEY;
+    return !key || key === "mock-openrouter-key";
+  }
+  // Default to gemini
+  const key = process.env.GEMINI_API_KEY;
+  return !key || key === "mock-gemini-key";
+})();
+
+// Async fire-and-forget logger helper
+function logApiUsage(callType: string, success: boolean, userId?: string) {
+  prisma.apiUsageLog
+    .create({
+      data: {
+        provider,
+        callType,
+        success,
+        userId: userId || null,
+      },
+    })
+    .catch((err) => {
+      console.error("[AI Provider] Failed to log API usage:", err);
+    });
+}
 
 /**
  * Basic text generation function wrapper.
  */
-export async function generateContent(prompt: string): Promise<string> {
-  if (isMock || !ai) {
-    console.log("[AI Provider] Using mock text generation.");
-    return generateMockText(prompt);
+export async function generateContent(prompt: string, userId?: string): Promise<string> {
+  if (isMock) {
+    console.log(`[AI Provider] Using mock text generation (Provider: ${provider}).`);
+    const result = generateMockText(prompt);
+    logApiUsage("generateContent", false, userId);
+    return result;
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-    });
-    return response.text || "";
+    let result = "";
+    if (provider === "groq") {
+      result = await groqProvider.generateContent(prompt);
+    } else if (provider === "openrouter") {
+      result = await openrouterProvider.generateContent(prompt);
+    } else {
+      result = await geminiProvider.generateContent(prompt);
+    }
+
+    logApiUsage("generateContent", true, userId);
+    return result;
   } catch (error) {
-    console.error("[AI Provider] Gemini API error:", error);
-    // Fallback to mock on error to maintain app usability
-    return generateMockText(prompt);
+    console.error(`[AI Provider] ${provider} API error:`, error);
+    const result = generateMockText(prompt);
+    logApiUsage("generateContent", false, userId);
+    return result;
   }
 }
 
 /**
  * Structured JSON generation wrapper.
- * Uses Gemini's native JSON output mode.
+ * Uses native JSON output mode or appends schema instructions.
  */
-export async function generateStructuredJson<T>(prompt: string, responseSchema?: any): Promise<T> {
-  if (isMock || !ai) {
-    console.log("[AI Provider] Using mock JSON generation.");
-    return generateMockJson<T>(prompt);
+export async function generateStructuredJson<T>(
+  prompt: string,
+  responseSchema?: any,
+  userId?: string
+): Promise<T> {
+  if (isMock) {
+    console.log(`[AI Provider] Using mock JSON generation (Provider: ${provider}).`);
+    const result = generateMockJson<T>(prompt);
+    logApiUsage("generateStructuredJson", false, userId);
+    return result;
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-      }
-    });
+    let result: T;
+    if (provider === "groq") {
+      result = await groqProvider.generateStructuredJson<T>(prompt, responseSchema);
+    } else if (provider === "openrouter") {
+      result = await openrouterProvider.generateStructuredJson<T>(prompt, responseSchema);
+    } else {
+      result = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
+    }
 
-    const text = response.text || "{}";
-    return JSON.parse(text) as T;
+    logApiUsage("generateStructuredJson", true, userId);
+    return result;
   } catch (error) {
-    console.error("[AI Provider] Gemini JSON generation error:", error);
-    return generateMockJson<T>(prompt);
+    console.error(`[AI Provider] ${provider} JSON generation error:`, error);
+    const result = generateMockJson<T>(prompt);
+    logApiUsage("generateStructuredJson", false, userId);
+    return result;
   }
 }
 
@@ -101,48 +146,55 @@ function generateMockJson<T>(prompt: string): T {
         {
           targetUrl: "https://example.com/",
           type: "meta_title",
-          suggestedValue: "Local Professional Services & Maintenance Specialists | Contact Us"
+          suggestedValue: "Local Professional Services & Maintenance Specialists | Contact Us",
         },
         {
           targetUrl: "https://example.com/",
           type: "meta_description",
-          suggestedValue: "Looking for trusted local maintenance and professional services? Connect with our experienced team today for reliable solutions, quick response times, and premium results."
+          suggestedValue:
+            "Looking for trusted local maintenance and professional services? Connect with our experienced team today for reliable solutions, quick response times, and premium results.",
         },
         {
           targetUrl: "https://example.com/",
           type: "schema_markup",
-          suggestedValue: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "Local Maintenance Specialists",
-            "url": "https://example.com/",
-            "logo": "https://example.com/logo.png",
-            "description": "Premium local maintenance and support services for residential and commercial spaces."
-          }, null, 2)
+          suggestedValue: JSON.stringify(
+            {
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              "name": "Local Maintenance Specialists",
+              "url": "https://example.com/",
+              "logo": "https://example.com/logo.png",
+              "description": "Premium local maintenance and support services for residential and commercial spaces.",
+            },
+            null,
+            2
+          ),
         },
         {
           targetUrl: "https://example.com/",
           type: "missing_alt",
-          suggestedValue: "Team of local maintenance professionals repairing a residential pipeline system"
+          suggestedValue: "Team of local maintenance professionals repairing a residential pipeline system",
         },
         {
           targetUrl: "https://example.com/",
           type: "broken_link",
-          suggestedValue: "Update broken link endpoint to target https://example.com/contact-us"
-        }
+          suggestedValue: "Update broken link endpoint to target https://example.com/contact-us",
+        },
       ],
       blogPosts: [
         {
           title: "How to Prevent Common Household Plumbing Emergencies",
-          content: "<!-- wp:paragraph -->\n<p>Plumbing emergencies are stressful and costly. Here are key preventative steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Regularly Inspect Valves</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Check the shutoff valves under your sinks and toilet at least twice a year...</p>\n<!-- /wp:paragraph -->",
-          suggestedSlug: "prevent-common-plumbing-emergencies"
+          content:
+            "<!-- wp:paragraph -->\n<p>Plumbing emergencies are stressful and costly. Here are key preventative steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Regularly Inspect Valves</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Check the shutoff valves under your sinks and toilet at least twice a year...</p>\n<!-- /wp:paragraph -->",
+          suggestedSlug: "prevent-common-plumbing-emergencies",
         },
         {
           title: "The Ultimate Local Business SEO Checklist for 2026",
-          content: "<!-- wp:paragraph -->\n<p>Struggling to get local customers? In 2026, local SEO is more critical than ever. Follow these simple steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>Optimize Google Maps Listing</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Make sure your operational hours are current and respond to every client review...</p>\n<!-- /wp:paragraph -->",
-          suggestedSlug: "local-seo-checklist-2026"
-        }
-      ]
+          content:
+            "<!-- wp:paragraph -->\n<p>Struggling to get local customers? In 2026, local SEO is more critical than ever. Follow these simple steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>Optimize Google Maps Listing</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Make sure your operational hours are current and respond to every client review...</p>\n<!-- /wp:paragraph -->",
+          suggestedSlug: "local-seo-checklist-2026",
+        },
+      ],
     };
     return mockResponse as unknown as T;
   }
