@@ -163,7 +163,7 @@ export default function AdminPage() {
 
         {/* Users registry list and recent logs */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <UsersTable users={stats.usersList} />
+          <UsersTable users={stats.usersList} totalUsers={stats.totalUsers} />
           <ActivityFeed activity={stats.recentActivity} />
         </div>
       </div>

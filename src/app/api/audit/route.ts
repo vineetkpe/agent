@@ -110,8 +110,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unsafe website URL provided." }, { status: 400 });
     }
 
-    console.log(`[Audit Route] Starting audit pipeline for user ${currentUser.email} on: ${cleanUrl}`);
-
     // 2. Fetch or create Site
     let site = await prisma.site.findFirst({
       where: {
@@ -119,6 +117,30 @@ export async function POST(req: Request) {
         url: cleanUrl,
       },
     });
+
+    // COST-1: Add a per-site audit cooldown to prevent cost/quota abuse
+    if (site) {
+      const latestAudit = await prisma.audit.findFirst({
+        where: { siteId: site.id },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (latestAudit) {
+        const cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES || "5", 10);
+        const nextAllowedTime = latestAudit.createdAt.getTime() + cooldownMinutes * 60 * 1000;
+        const now = Date.now();
+        if (now < nextAllowedTime) {
+          const diffMs = nextAllowedTime - now;
+          const diffMins = Math.ceil(diffMs / 60000);
+          return NextResponse.json(
+            { error: `Site was audited recently. Please wait ${diffMins} minute(s) before running another audit.` },
+            { status: 429 }
+          );
+        }
+      }
+    }
+
+    console.log(`[Audit Route] Starting audit pipeline for user ${currentUser.email} on: ${cleanUrl}`);
 
     if (!site) {
       site = await prisma.site.create({

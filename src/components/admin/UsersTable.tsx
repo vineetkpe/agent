@@ -13,9 +13,10 @@ interface UserItem {
 
 interface UsersTableProps {
   users: UserItem[];
+  totalUsers: number;
 }
 
-export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
+export const UsersTable: React.FC<UsersTableProps> = ({ users, totalUsers }) => {
   return (
     <Card className="p-6 overflow-hidden">
       <div className="mb-6">
@@ -82,6 +83,14 @@ export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
           </tbody>
         </table>
       </div>
+
+      {totalUsers > 100 && (
+        <div className="mt-4 pt-3 border-t border-zinc-200 text-right">
+          <span className="text-[10px] font-mono text-zinc-400 italic">
+            Showing 100 most recent of {totalUsers} total users.
+          </span>
+        </div>
+      )}
     </Card>
   );
 };

@@ -22,6 +22,10 @@ export async function generateContent(prompt: string): Promise<string> {
 
   if (!res.ok) {
     const errorText = await res.text();
+    const lowerError = errorText.toLowerCase();
+    if (lowerError.includes("model") && (lowerError.includes("not found") || lowerError.includes("does not exist") || lowerError.includes("unknown model") || lowerError.includes("invalid"))) {
+      throw new Error(`Configured model "${MODEL_NAME}" was rejected by OpenRouter. Check OPENROUTER_MODEL env var against the provider's current model list.`);
+    }
     throw new Error(`OpenRouter API returned status ${res.status}: ${errorText}`);
   }
 
@@ -59,6 +63,10 @@ Respond with ONLY valid JSON. Do NOT include markdown code blocks (e.g. \`\`\`js
 
   if (!res.ok) {
     const errorText = await res.text();
+    const lowerError = errorText.toLowerCase();
+    if (lowerError.includes("model") && (lowerError.includes("not found") || lowerError.includes("does not exist") || lowerError.includes("unknown model") || lowerError.includes("invalid"))) {
+      throw new Error(`Configured model "${MODEL_NAME}" was rejected by OpenRouter. Check OPENROUTER_MODEL env var against the provider's current model list.`);
+    }
     throw new Error(`OpenRouter JSON API returned status ${res.status}: ${errorText}`);
   }
 

@@ -153,6 +153,7 @@ export async function GET(req: Request) {
 
     // 7. Users details list for table view
     const allUsers = await prisma.user.findMany({
+      take: 100,
       orderBy: {
         createdAt: "desc",
       },
