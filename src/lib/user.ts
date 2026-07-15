@@ -48,41 +48,19 @@ export async function getCurrentUser(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
     token = authHeader.substring(7);
-  } else {
-    // 2. Check Cookies
-    const cookieHeader = req.headers.get("cookie") || "";
-    const cookies = cookieHeader.split(";").map(c => c.trim());
-    for (const cookie of cookies) {
-      const [name, val] = cookie.split("=");
-      if (name && val && (name.includes("auth-token") || name.includes("access-token") || name === "sb-token")) {
-        try {
-          const parsed = JSON.parse(decodeURIComponent(val));
-          if (parsed && typeof parsed === "object") {
-            token = parsed.access_token || parsed.token || token;
-          } else {
-            token = decodeURIComponent(val);
-          }
-        } catch {
-          token = decodeURIComponent(val);
-        }
-        break;
-      }
-    }
   }
 
-  // 3. Fallback for Local Dev / Testing if no token is found and Supabase keys are not fully set
+  // 2. Fallback for Local Dev / Testing if no token is found and in non-production
   if (!token) {
     if (process.env.NODE_ENV !== "production") {
-      if (!process.env.SUPABASE_URL || process.env.SUPABASE_URL === "mock-supabase-url" || process.env.SUPABASE_URL.startsWith("mock")) {
-        console.log("[Auth] [DEV-ONLY] No session token found. Using dev-only default user fallback.");
-        return await getOrCreateDefaultUser();
-      }
+      console.log("[Auth] [DEV-ONLY] No session token found. Using dev-only default user fallback.");
+      return await getOrCreateDefaultUser();
     }
     return null;
   }
 
   try {
-    // 4. Validate session with Supabase
+    // 3. Validate session with Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       console.error("[Auth] Supabase session validation failed:", error);
@@ -97,7 +75,7 @@ export async function getCurrentUser(req: Request) {
       return null;
     }
 
-    // 5. Look up or register the User in the local database
+    // 4. Look up or register the User in the local database
     let dbUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -130,3 +108,4 @@ export async function getCurrentUser(req: Request) {
     return null;
   }
 }
+
