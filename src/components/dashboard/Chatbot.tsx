@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  isError?: boolean;
 }
 
 interface ChatbotProps {
@@ -78,13 +79,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({ currentSite }) => {
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: "I ran into a small error processing that. Please try again." },
+          { role: "assistant", content: data.error || "I ran into a small error processing that. Please try again.", isError: true },
         ]);
       }
-    } catch {
+    } catch (err: any) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Failed to connect to AI assistant. Check your connection." },
+        { role: "assistant", content: err.message || "Failed to connect to AI assistant. Check your connection.", isError: true },
       ]);
     } finally {
       setIsLoading(false);
@@ -149,6 +150,8 @@ export const Chatbot: React.FC<ChatbotProps> = ({ currentSite }) => {
                   className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed border shadow-sm ${
                     msg.role === "user"
                       ? "bg-violet-600 text-white border-violet-750 rounded-tr-none shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]"
+                      : msg.isError
+                      ? "bg-red-50 text-red-800 border-red-200 rounded-tl-none font-mono shadow-[2px_2px_0px_0px_rgba(220,38,38,0.1)]"
                       : "bg-white text-zinc-850 border-zinc-200 rounded-tl-none font-mono"
                   }`}
                 >

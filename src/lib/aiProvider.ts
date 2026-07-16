@@ -58,11 +58,10 @@ export async function generateContent(prompt: string, userId?: string): Promise<
 
     logApiUsage("generateContent", true, userId);
     return result;
-  } catch (error) {
-    console.error(`[AI Provider] ${provider} API error:`, error);
-    const result = generateMockText(prompt);
+  } catch (error: any) {
+    console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateContent:`, error);
     logApiUsage("generateContent", false, userId);
-    return result;
+    throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
   }
 }
 
@@ -94,11 +93,10 @@ export async function generateStructuredJson<T>(
 
     logApiUsage("generateStructuredJson", true, userId);
     return result;
-  } catch (error) {
-    console.error(`[AI Provider] ${provider} JSON generation error:`, error);
-    const result = generateMockJson<T>(prompt);
+  } catch (error: any) {
+    console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateStructuredJson:`, error);
     logApiUsage("generateStructuredJson", false, userId);
-    return result;
+    throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
   }
 }
 
