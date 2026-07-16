@@ -62,6 +62,31 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     })
     .slice(0, 5);
 
+  const getLcpInfo = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return { text: "--", color: "text-zinc-500" };
+    if (val < 2.5) return { text: `${val}s (Good)`, color: "text-emerald-600" };
+    if (val <= 4.0) return { text: `${val}s (Warn)`, color: "text-amber-600" };
+    return { text: `${val}s (Poor)`, color: "text-red-655" };
+  };
+
+  const getClsInfo = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return { text: "--", color: "text-zinc-500" };
+    if (val < 0.1) return { text: `${val} (Good)`, color: "text-emerald-600" };
+    if (val <= 0.25) return { text: `${val} (Warn)`, color: "text-amber-600" };
+    return { text: `${val} (Poor)`, color: "text-red-655" };
+  };
+
+  const getInpInfo = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return { text: "--", color: "text-zinc-500" };
+    if (val < 200) return { text: `${val}ms (Good)`, color: "text-emerald-600" };
+    if (val <= 500) return { text: `${val}ms (Warn)`, color: "text-amber-600" };
+    return { text: `${val}ms (Poor)`, color: "text-red-655" };
+  };
+
+  const lcpInfo = getLcpInfo(currentAudit?.lcpSeconds);
+  const clsInfo = getClsInfo(currentAudit?.clsScore);
+  const inpInfo = getInpInfo(currentAudit?.inpMilliseconds);
+
   return (
     <div className="space-y-8 animate-slide-up">
       {/* Domain Quick Overview Card */}
@@ -90,17 +115,17 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       </Card>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-        <Card variant="flat" className="flex flex-col p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
             Total Issues Found
           </span>
-          <span className="text-2xl font-extrabold text-indigo-600 mt-1 font-mono">
+          <span className="text-2xl font-extrabold text-indigo-650 mt-1 font-mono">
             {items.length}
           </span>
         </Card>
 
-        <Card variant="flat" className="flex flex-col p-4">
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
             Fixes Applied
           </span>
@@ -109,30 +134,57 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </span>
         </Card>
 
-        <Card variant="flat" className="flex flex-col p-4">
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            Fixes Pending Review
+            Pending Review
           </span>
           <span className="text-2xl font-extrabold text-amber-600 mt-1 font-mono">
             {pendingCount}
           </span>
         </Card>
 
-        <Card variant="flat" className="flex flex-col p-4">
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            Latest SEO Score
+            SEO Score
           </span>
-          <span className="text-2xl font-extrabold text-violet-600 mt-1 font-mono">
+          <span className="text-2xl font-extrabold text-violet-650 mt-1 font-mono">
             {currentAudit?.scoreSeo ? `${currentAudit.scoreSeo}%` : "--"}
           </span>
         </Card>
 
-        <Card variant="flat" className="flex flex-col p-4">
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            Latest Perf Score
+            Performance Score
           </span>
           <span className="text-2xl font-extrabold text-emerald-600 mt-1 font-mono">
             {currentAudit?.scorePerformance ? `${currentAudit.scorePerformance}` : "--"}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            LCP (Load Speed)
+          </span>
+          <span className={`text-sm font-extrabold mt-1 font-mono ${lcpInfo.color}`}>
+            {lcpInfo.text}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            CLS (Visual Shift)
+          </span>
+          <span className={`text-sm font-extrabold mt-1 font-mono ${clsInfo.color}`}>
+            {clsInfo.text}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            INP/TBT (Latency)
+          </span>
+          <span className={`text-sm font-extrabold mt-1 font-mono ${inpInfo.color}`}>
+            {inpInfo.text}
           </span>
         </Card>
       </div>
@@ -170,7 +222,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                       {item.type.replace("_", " ").toUpperCase()}
                     </span>
                     <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[200px] sm:max-w-md">
-                      {item.targetUrl}
+                      {item.targetUrl.includes("example.com") && currentSite?.url
+                        ? item.targetUrl.replace("https://example.com", currentSite.url)
+                        : item.targetUrl}
                     </span>
                   </div>
                 </div>

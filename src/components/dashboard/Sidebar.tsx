@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu } from "lucide-react";
+import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2 } from "lucide-react";
 import { TabType } from "@/hooks/useDashboardData";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -31,7 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    window.location.replace("/login");
   };
 
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
@@ -39,6 +39,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "overview",
       label: "Agent Activity",
       icon: <Activity className="w-4 h-4" />,
+    },
+    {
+      id: "performance",
+      label: "SEO Analytics",
+      icon: <BarChart2 className="w-4 h-4" />,
+    },
+    {
+      id: "sites",
+      label: "My Audited Sites",
+      icon: <Layers className="w-4 h-4" />,
+    },
+    {
+      id: "context",
+      label: "AI Agent Context",
+      icon: <Database className="w-4 h-4" />,
     },
     {
       id: "crawler",
@@ -74,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <aside
         className={`
-          fixed inset-y-0 left-0 w-64 border-r flex flex-col shrink-0 z-40 border-zinc-200 bg-white shadow-xl transition-transform duration-300 md:static md:translate-x-0 md:shadow-sm md:z-20
+          fixed inset-y-0 left-0 w-64 border-r flex flex-col shrink-0 z-40 border-zinc-200 bg-white shadow-xl transition-transform duration-300 md:sticky md:top-0 md:h-screen md:self-start md:translate-x-0 md:shadow-sm md:z-20
           ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >

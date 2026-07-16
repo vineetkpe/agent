@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections";
+export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance";
 
 export function useDashboardData() {
   const [siteUrl, setSiteUrl] = useState("");
@@ -10,6 +10,9 @@ export function useDashboardData() {
   const [currentSite, setCurrentSite] = useState<any>(null);
   const [currentAudit, setCurrentAudit] = useState<any>(null);
   const [pastAudits, setPastAudits] = useState<any[]>([]);
+  const [allSites, setAllSites] = useState<any[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [wpUrl, setWpUrl] = useState("");
@@ -50,10 +53,13 @@ export function useDashboardData() {
     return headers;
   };
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = async (siteIdToLoad?: string, auditIdToLoad?: string) => {
     try {
       const headers = await getHeaders("");
-      const res = await fetch("/api/audit", { headers });
+      const params = new URLSearchParams();
+      if (siteIdToLoad) params.set("siteId", siteIdToLoad);
+      if (auditIdToLoad) params.set("auditId", auditIdToLoad);
+      const res = await fetch(`/api/audit?${params.toString()}`, { headers });
       if (res.ok) {
         const data = await res.json();
         if (data.site) {
@@ -61,12 +67,22 @@ export function useDashboardData() {
           setSiteUrl(data.site.url);
           setWpUrl(data.site.wpUrl || "");
           setWpUsername(data.site.wpUsername || "");
+          setSelectedSiteId(data.site.id);
+        } else {
+          setCurrentSite(null);
+          setCurrentAudit(null);
+          setPastAudits([]);
         }
         if (data.audit) {
           setCurrentAudit(data.audit);
+        } else {
+          setCurrentAudit(null);
         }
         if (data.pastAudits) {
           setPastAudits(data.pastAudits);
+        }
+        if (data.allSites) {
+          setAllSites(data.allSites);
         }
         if (data.user) {
           setCurrentUser(data.user);
@@ -144,7 +160,9 @@ export function useDashboardData() {
       const data = await res.json();
       if (data.success) {
         setCurrentAudit(data.audit);
-        fetchInitialData();
+        setSelectedSiteId(data.audit.siteId);
+        setSelectedAuditId(data.audit.id);
+        fetchInitialData(data.audit.siteId, data.audit.id);
         setActiveTab("crawler");
       }
     } catch (err: any) {
@@ -185,7 +203,7 @@ export function useDashboardData() {
 
       setWpMessage({ text: "CMS REST API connected and authorized successfully!", isError: false });
       setWpAppPassword("");
-      fetchInitialData();
+      fetchInitialData(selectedSiteId || undefined);
     } catch (err: any) {
       setWpMessage({ text: err.message || "Could not authorize CMS API connection.", isError: true });
     } finally {
@@ -237,9 +255,101 @@ export function useDashboardData() {
     }
   };
 
-  useEffect(() => {
-    fetchInitialData();
+  const deleteSite = async (siteId: string) => {
+    if (!confirm("Are you sure you want to delete this site and all its audit reports? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      const headers = await getHeaders();
+      const res = await fetch("/api/site/delete", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ siteId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // If the deleted site was selected, pick another or clear
+        const remaining = allSites.filter((s) => s.id !== siteId);
+        if (selectedSiteId === siteId) {
+          if (remaining.length > 0) {
+            setSelectedSiteId(remaining[0].id);
+          } else {
+            setSelectedSiteId(null);
+            setCurrentSite(null);
+            setCurrentAudit(null);
+          }
+        }
+        setAllSites(remaining);
+        await fetchInitialData(selectedSiteId === siteId ? undefined : selectedSiteId || undefined);
+      } else {
+        alert(data.error || "Failed to delete site.");
+      }
+    } catch (err) {
+      console.error("Failed to delete site", err);
+    }
+  };
 
+  const toggleGscConnection = async (siteId: string, gscUrl?: string, disconnect?: boolean) => {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch("/api/site/gsc", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ siteId, gscUrl, disconnect }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Update states locally
+        if (currentSite && currentSite.id === siteId) {
+          setCurrentSite((prev: any) => ({
+            ...prev,
+            gscConnected: data.site.gscConnected,
+            gscUrl: data.site.gscUrl,
+          }));
+        }
+        setAllSites((prev: any[]) =>
+          prev.map((s) =>
+            s.id === siteId
+              ? { ...s, gscConnected: data.site.gscConnected, gscUrl: data.site.gscUrl }
+              : s
+          )
+        );
+      } else {
+        alert(data.error || "Failed to toggle Search Console connection.");
+      }
+    } catch (err) {
+      console.error("GSC connection failed", err);
+    }
+  };
+
+  const addSite = async (url: string) => {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch("/api/site/create", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAllSites((prev) => [data.site, ...prev]);
+        setSelectedSiteId(data.site.id);
+        setSelectedAuditId(null);
+        setCurrentAudit(null);
+        await fetchInitialData(data.site.id);
+      } else {
+        alert(data.error || "Failed to add new site.");
+      }
+    } catch (err) {
+      console.error("Failed to add site", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialData(selectedSiteId || undefined);
+  }, [selectedSiteId]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("payment") === "success" || params.get("mock_payment") === "success") {
@@ -284,5 +394,14 @@ export function useDashboardData() {
     handleConnectCMS,
     handleActionItem,
     pastAudits,
+    allSites,
+    selectedSiteId,
+    setSelectedSiteId,
+    selectedAuditId,
+    setSelectedAuditId,
+    fetchInitialData,
+    deleteSite,
+    toggleGscConnection,
+    addSite,
   };
 }

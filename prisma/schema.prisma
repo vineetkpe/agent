@@ -28,6 +28,10 @@ model Site {
   wpUrl                 String?
   wpUsername            String?
   wpAppPasswordEncrypted String?    // Encrypted application password
+  customInstructions    String?
+  gscConnected          Boolean     @default(false)
+  gscUrl                String?
+  businessProfile       String?     // Stored as JSON string
   createdAt             DateTime    @default(now())
   audits                Audit[]
   auditItems            AuditItem[]
@@ -39,6 +43,9 @@ model Audit {
   site             Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
   scorePerformance Int         @default(0)
   scoreSeo         Int         @default(0)
+  lcpSeconds       Float?
+  clsScore         Float?
+  inpMilliseconds  Float?
   status           String      @default("pending") // pending, completed, failed
   createdAt        DateTime    @default(now())
   items            AuditItem[]

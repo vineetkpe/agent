@@ -10,6 +10,10 @@ import { CrawlerTab } from "@/components/dashboard/CrawlerTab";
 import { RecommendationsTab } from "@/components/dashboard/RecommendationsTab";
 import { ContentTab } from "@/components/dashboard/ContentTab";
 import { ConnectionsTab } from "@/components/dashboard/ConnectionsTab";
+import { Chatbot } from "@/components/dashboard/Chatbot";
+import { SitesTab } from "@/components/dashboard/SitesTab";
+import { AIContextTab } from "@/components/dashboard/AIContextTab";
+import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
 import { ChevronRight, Menu } from "lucide-react";
 
 export default function DashboardPage() {
@@ -97,7 +101,27 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            {data.allSites && data.allSites.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 font-mono hidden sm:inline">Active Site:</span>
+                <select
+                  value={data.selectedSiteId || ""}
+                  onChange={(e) => {
+                    data.setSelectedSiteId(e.target.value);
+                    data.setSelectedAuditId(null);
+                  }}
+                  className="px-2.5 py-1 text-xs font-bold border-2 border-zinc-950 bg-white rounded-lg focus:outline-none shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]"
+                >
+                  {data.allSites.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.url.replace(/^https?:\/\//i, "")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {data.currentSite?.wpUrl ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-sm font-mono">
                 CMS Connected
@@ -182,10 +206,46 @@ export default function DashboardPage() {
               setWpAppPassword={data.setWpAppPassword}
               isConnectingWp={data.isConnectingWp}
               wpMessage={data.wpMessage}
+              currentSite={data.currentSite}
+              toggleGscConnection={data.toggleGscConnection}
+            />
+          )}
+
+          {data.activeTab === "sites" && (
+            <SitesTab
+              allSites={data.allSites}
+              selectedSiteId={data.selectedSiteId}
+              setSelectedSiteId={data.setSelectedSiteId}
+              selectTab={data.selectTab}
+              pastAudits={data.pastAudits}
+              selectedAuditId={data.selectedAuditId}
+              setSelectedAuditId={data.setSelectedAuditId}
+              currentAudit={data.currentAudit}
+              deleteSite={data.deleteSite}
+              toggleGscConnection={data.toggleGscConnection}
+              addSite={data.addSite}
+            />
+          )}
+
+          {data.activeTab === "context" && (
+            <AIContextTab
+              currentSite={data.currentSite}
+              currentAudit={data.currentAudit}
+              fetchInitialData={data.fetchInitialData}
+            />
+          )}
+
+          {data.activeTab === "performance" && (
+            <PerformanceTab
+              pastAudits={data.pastAudits}
+              currentAudit={data.currentAudit}
+              currentSite={data.currentSite}
+              selectTab={data.selectTab}
             />
           )}
         </div>
       </main>
+      <Chatbot currentSite={data.currentSite} />
     </div>
   );
 }

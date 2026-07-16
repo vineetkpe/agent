@@ -11,6 +11,7 @@ export interface CrawledPage {
   externalLinks: string[];
   schemas: string[]; // JSON-LD text content
   rawHtml: string;
+  visibleText?: string;
 }
 
 export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawledPage[]> {
@@ -147,6 +148,11 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         }
       });
 
+      // Extract visible text (remove scripts, style, frames, svg etc.)
+      const textClone = cheerio.load(html);
+      textClone("script, style, iframe, noscript, svg").remove();
+      const visibleText = textClone("body").text().replace(/\s+/g, " ").trim().slice(0, 1200);
+
       crawled.set(cleanUrlStr, {
         url: cleanUrlStr,
         title,
@@ -157,6 +163,7 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         externalLinks: Array.from(externalLinksSet),
         schemas,
         rawHtml: html,
+        visibleText,
       });
 
     } catch (error) {

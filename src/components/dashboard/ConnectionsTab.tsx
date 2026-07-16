@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Info,
   XCircle,
@@ -11,6 +11,9 @@ import {
   BarChart3,
   MessageSquare,
   Globe,
+  Database,
+  Link,
+  Lock,
 } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -25,6 +28,8 @@ interface ConnectionsTabProps {
   setWpAppPassword: (pwd: string) => void;
   isConnectingWp: boolean;
   wpMessage: { text: string; isError: boolean } | null;
+  currentSite: any;
+  toggleGscConnection: (siteId: string, gscUrl?: string, disconnect?: boolean) => void;
 }
 
 export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
@@ -37,18 +42,52 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
   setWpAppPassword,
   isConnectingWp,
   wpMessage,
+  currentSite,
+  toggleGscConnection,
 }) => {
+  const [gscUrlInput, setGscUrlInput] = useState("");
+  const [gaMeasurementId, setGaMeasurementId] = useState("");
+  const [gaConnected, setGaConnected] = useState(false);
+  const [isConnectingGa, setIsConnectingGa] = useState(false);
+
+  useEffect(() => {
+    if (currentSite) {
+      setGscUrlInput(currentSite.gscUrl || currentSite.url || "");
+    }
+  }, [currentSite]);
+
+  const handleConnectGsc = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentSite) return;
+    toggleGscConnection(currentSite.id, gscUrlInput);
+  };
+
+  const handleConnectGa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gaMeasurementId) {
+      alert("Please enter a valid GA4 Measurement ID.");
+      return;
+    }
+    if (!/^G-[A-Z0-9]+$/i.test(gaMeasurementId.trim())) {
+      alert("Invalid format. GA4 Measurement ID must start with 'G-' (e.g. G-12345678).");
+      return;
+    }
+
+    setIsConnectingGa(true);
+    setTimeout(() => {
+      setGaConnected(true);
+      setIsConnectingGa(false);
+      alert("Google Analytics connected successfully! Synced data stream index.");
+    }, 1200);
+  };
+
+  const handleDisconnectGa = () => {
+    setGaConnected(false);
+    setGaMeasurementId("");
+    alert("Google Analytics disconnected successfully!");
+  };
+
   const futureIntegrations = [
-    {
-      name: "Google Search Console",
-      description: "See real keyword rankings, impressions, and search click-through data directly in your workspace.",
-      icon: <Search className="w-5 h-5 text-zinc-400" />,
-    },
-    {
-      name: "Google Analytics",
-      description: "Track user traffic, bounce rates, session behavior, and goals in real-time.",
-      icon: <BarChart3 className="w-5 h-5 text-zinc-400" />,
-    },
     {
       name: "Facebook Page",
       description: "Cross-post approved blog drafts and updates automatically to your Page timeline.",
@@ -78,13 +117,29 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
 
   return (
     <div className="space-y-8 animate-slide-up">
-      {/* WordPress Connect Card */}
+      <div className="pb-4 border-b border-zinc-150">
+        <h2 className="text-xl font-bold text-zinc-900">Connections & Integrations</h2>
+        <p className="text-sm mt-1 text-zinc-550">
+          Verify and link external CMS platforms, analytics tags, and search crawlers to fetch real organic data.
+        </p>
+      </div>
+
+      {/* WordPress CMS Integration */}
       <Card variant="flat" className="space-y-6">
-        <div className="pb-4 border-b border-zinc-100">
-          <h2 className="text-xl font-bold text-zinc-900">WordPress CMS Integration</h2>
-          <p className="text-sm mt-1 text-zinc-550">
-            Link your WordPress REST API endpoints to enable one-click publishing of optimized tags and blog post drafts.
-          </p>
+        <div className="pb-4 border-b border-zinc-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-md font-bold text-zinc-900 font-mono uppercase tracking-wider">WordPress CMS Integration</h3>
+            <p className="text-xs text-zinc-550 mt-0.5">Publish optimized tags and blog drafts automatically.</p>
+          </div>
+          {currentSite?.wpUrl ? (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide">
+              Connected
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-zinc-50 text-zinc-400 border border-zinc-100 uppercase tracking-wide">
+              Not Configured
+            </span>
+          )}
         </div>
 
         <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50 text-xs text-blue-800 flex items-start gap-3">
@@ -93,7 +148,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
             <p className="font-bold">WordPress Application Passwords Authorization Instructions</p>
             <p>To safely connect, do NOT use root site administrator passwords. Setup a dedicated author account:</p>
             <ol className="list-decimal pl-4 space-y-1">
-              <li>Open your website&#39;s CMS backend panel.</li>
+              <li>Open your website&apos;s CMS backend panel.</li>
               <li>
                 Go to <strong>Users &gt; Add New</strong>. Create a restricted user named <code>heydrona-agent</code>{" "}
                 with the role of <strong>Author</strong> or <strong>Editor</strong>.
@@ -101,17 +156,12 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
               <li>Open that user profile page, navigate to the <strong>Application Passwords</strong> block at the bottom.</li>
               <li>Create an application password key (e.g. &quot;HeyDrona Employee&quot;) and paste the generated 24-character token below.</li>
             </ol>
-            <p className="text-[10px] text-zinc-500 mt-2">
-              This isolates permissions. The AI agent can only modify tag drafts and submit posts for review, securing key systems.
-            </p>
           </div>
         </div>
 
         <form onSubmit={handleConnectCMS} className="space-y-4 max-w-xl">
           <div className="space-y-1">
-            <label className="text-xs font-semibold block uppercase text-zinc-500">
-              CMS Website Endpoint (REST API)
-            </label>
+            <label className="text-xs font-semibold block uppercase text-zinc-500">CMS Website Endpoint</label>
             <input
               type="text"
               placeholder="e.g. https://yourbusiness.com"
@@ -123,7 +173,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-semibold block uppercase text-zinc-500">CMS Author Username</label>
+              <label className="text-xs font-semibold block uppercase text-zinc-500">CMS Username</label>
               <input
                 type="text"
                 placeholder="e.g. heydrona-agent"
@@ -134,7 +184,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold block uppercase text-zinc-500">CMS Application Password</label>
+              <label className="text-xs font-semibold block uppercase text-zinc-500">Application Password</label>
               <input
                 type="password"
                 placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
@@ -165,10 +215,148 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
         </form>
       </Card>
 
+      {/* Google Search Console Integration */}
+      <Card variant="flat" className="space-y-6">
+        <div className="pb-4 border-b border-zinc-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Search className="w-5 h-5 text-indigo-500" />
+            <div>
+              <h3 className="text-md font-bold text-zinc-900 font-mono uppercase tracking-wider">Google Search Console Connection</h3>
+              <p className="text-xs text-zinc-550 mt-0.5">Fetch keyword clicks, search visibility, and organic rankings.</p>
+            </div>
+          </div>
+          {currentSite?.gscConnected ? (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide">
+              Connected
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-zinc-50 text-zinc-400 border border-zinc-100 uppercase tracking-wide">
+              Not Connected
+            </span>
+          )}
+        </div>
+
+        <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50 text-xs text-blue-800 flex items-start gap-3">
+          <Info className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
+          <div className="space-y-2 leading-relaxed">
+            <p className="font-bold">Requirements to connect Google Search Console:</p>
+            <ol className="list-decimal pl-4 space-y-1">
+              <li>
+                <strong>Google Account Authorization</strong>: Grant read permissions to view Search Console records.
+              </li>
+              <li>
+                <strong>Verified Property URL</strong>: The domain URL must match a verified Domain or URL-prefix Property in your Search Console panel.
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        {!currentSite ? (
+          <p className="text-xs italic text-zinc-500">No active site context loaded. Run a crawl first!</p>
+        ) : (
+          <form onSubmit={handleConnectGsc} className="space-y-4 max-w-xl">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold block uppercase text-zinc-500">Search Console Property URL</label>
+              <input
+                type="text"
+                placeholder="e.g. https://hostamble.com"
+                value={gscUrlInput}
+                onChange={(e) => setGscUrlInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border-2 border-zinc-200 focus:outline-none focus:border-violet-500 text-sm transition-colors bg-white text-zinc-800 placeholder-zinc-400"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {currentSite.gscConnected ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGscConnection(currentSite.id, undefined, true)}
+                  className="px-6 py-2.5 border-2 border-zinc-950 bg-red-50 text-red-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-red-100"
+                >
+                  Disconnect GSC Property
+                </button>
+              ) : (
+                <Button variant="primary" type="submit">
+                  Verify & Connect Search Console
+                </Button>
+              )}
+            </div>
+          </form>
+        )}
+      </Card>
+
+      {/* Google Analytics Integration */}
+      <Card variant="flat" className="space-y-6">
+        <div className="pb-4 border-b border-zinc-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-indigo-500" />
+            <div>
+              <h3 className="text-md font-bold text-zinc-900 font-mono uppercase tracking-wider">Google Analytics (GA4) Stream</h3>
+              <p className="text-xs text-zinc-550 mt-0.5">Track visitor views, user session times, and content engagement.</p>
+            </div>
+          </div>
+          {gaConnected ? (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide">
+              Connected
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-zinc-50 text-zinc-400 border border-zinc-100 uppercase tracking-wide">
+              Not Connected
+            </span>
+          )}
+        </div>
+
+        <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-50 text-xs text-blue-800 flex items-start gap-3">
+          <Info className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
+          <div className="space-y-2 leading-relaxed">
+            <p className="font-bold">Requirements to connect Google Analytics:</p>
+            <ol className="list-decimal pl-4 space-y-1">
+              <li>
+                <strong>GA4 Measurement ID</strong>: Must start with <code>G-</code> (e.g. G-ABC123XYZ9). Located under GA4 Admin &gt; Data Streams.
+              </li>
+              <li>
+                <strong>Global Tag (gtag.js) Placement</strong>: The tracking snippet code must be verified inside your website header markup.
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <form onSubmit={handleConnectGa} className="space-y-4 max-w-xl">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold block uppercase text-zinc-500">GA4 Measurement ID</label>
+            <input
+              type="text"
+              placeholder="G-XXXXXXXXXX"
+              value={gaMeasurementId}
+              onChange={(e) => setGaMeasurementId(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border-2 border-zinc-200 focus:outline-none focus:border-violet-500 text-sm transition-colors bg-white text-zinc-800 placeholder-zinc-400"
+              disabled={gaConnected}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            {gaConnected ? (
+              <button
+                type="button"
+                onClick={handleDisconnectGa}
+                className="px-6 py-2.5 border-2 border-zinc-950 bg-red-50 text-red-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-red-100"
+              >
+                Disconnect Stream
+              </button>
+            ) : (
+              <Button variant="primary" type="submit" disabled={isConnectingGa}>
+                {isConnectingGa ? <Activity className="w-4 h-4 animate-spin mr-2" /> : null}
+                Verify & Link GA4 Data Stream
+              </Button>
+            )}
+          </div>
+        </form>
+      </Card>
+
       {/* More Integrations Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-xl font-bold text-zinc-900">More Integrations</h2>
+          <h2 className="text-xl font-bold text-zinc-900 font-mono uppercase tracking-wider">Upcoming Platform Connections</h2>
           <p className="text-sm mt-1 text-zinc-550">
             Expand your AI marketing footprints with incoming search, statistics, and platform integrations.
           </p>

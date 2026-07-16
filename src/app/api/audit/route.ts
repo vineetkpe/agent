@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { crawlSite } from "@/lib/crawler";
 import { runSeoAudits } from "@/lib/seoChecks";
 import { generateStructuredJson } from "@/lib/aiProvider";
+import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
@@ -16,7 +17,7 @@ const geminiResponseSchema = {
         type: "OBJECT",
         properties: {
           targetUrl: { type: "STRING" },
-          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link"] },
+          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link", "heading_structure", "canonical_tag", "social_meta", "duplicate_content"] },
           suggestedValue: { type: "STRING" },
         },
         required: ["targetUrl", "type", "suggestedValue"],
@@ -45,23 +46,68 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const site = await prisma.site.findFirst({
+    const { searchParams } = new URL(req.url);
+    const requestedSiteId = searchParams.get("siteId");
+    const requestedAuditId = searchParams.get("auditId");
+
+    let site;
+    if (requestedSiteId) {
+      site = await prisma.site.findFirst({
+        where: { id: requestedSiteId, userId: currentUser.id },
+        select: {
+          id: true,
+          url: true,
+          wpUrl: true,
+          wpUsername: true,
+          customInstructions: true,
+          gscConnected: true,
+          gscUrl: true,
+          businessProfile: true,
+          createdAt: true,
+        },
+      });
+    } else {
+      site = await prisma.site.findFirst({
+        where: { userId: currentUser.id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          url: true,
+          wpUrl: true,
+          wpUsername: true,
+          customInstructions: true,
+          gscConnected: true,
+          gscUrl: true,
+          businessProfile: true,
+          createdAt: true,
+        },
+      });
+    }
+
+    const allSites = await prisma.site.findMany({
       where: { userId: currentUser.id },
       select: {
         id: true,
         url: true,
         wpUrl: true,
         wpUsername: true,
+        customInstructions: true,
+        gscConnected: true,
+        gscUrl: true,
+        businessProfile: true,
         createdAt: true,
       },
+      orderBy: { createdAt: "desc" },
     });
 
     if (!site) {
-      return NextResponse.json({ site: null, audit: null, pastAudits: [] });
+      return NextResponse.json({ site: null, audit: null, pastAudits: [], allSites });
     }
 
     const latestAudit = await prisma.audit.findFirst({
-      where: { siteId: site.id },
+      where: requestedAuditId 
+        ? { id: requestedAuditId, siteId: site.id }
+        : { siteId: site.id },
       orderBy: { createdAt: "desc" },
       include: {
         items: true,
@@ -70,12 +116,16 @@ export async function GET(req: Request) {
 
     const pastAudits = await prisma.audit.findMany({
       where: { siteId: site.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         scorePerformance: true,
         scoreSeo: true,
+        lcpSeconds: true,
+        clsScore: true,
+        inpMilliseconds: true,
         createdAt: true,
+        status: true,
       },
     });
 
@@ -83,6 +133,7 @@ export async function GET(req: Request) {
       site,
       audit: latestAudit,
       pastAudits,
+      allSites,
       user: {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,
@@ -154,22 +205,42 @@ export async function POST(req: Request) {
 
     console.log(`[Audit Route] Starting audit pipeline for user ${currentUser.email} on: ${cleanUrl}`);
 
-    if (!site) {
-      site = await prisma.site.create({
-        data: {
-          userId: currentUser.id,
-          url: cleanUrl,
-        },
-      });
-    }
-
     // 3. Run crawler
     const crawledPages = await crawlSite(cleanUrl, 10); // cap at 10 pages for speed/testing
     if (crawledPages.length === 0) {
       return NextResponse.json({ error: `Could not fetch or crawl the site at ${cleanUrl}. Check if the URL is active.` }, { status: 422 });
     }
 
-    // 4. Run local SEO audits
+    // 4. Run Business Intelligence analysis
+    let businessProfileData: string | null = null;
+    try {
+      console.log(`[Audit Route] Analyzing business profile for ${cleanUrl}...`);
+      const profile = await analyzeBusinessProfile(crawledPages, cleanUrl, currentUser.id);
+      businessProfileData = JSON.stringify(profile);
+      console.log(`[Audit Route] Discovered Business Profile (Confidence: ${profile.confidenceScore}): ${profile.category}`);
+    } catch (biError) {
+      console.error("[Audit Route] Business Intelligence layer failure:", biError);
+    }
+
+    // 5. Create or update Site record
+    if (!site) {
+      site = await prisma.site.create({
+        data: {
+          userId: currentUser.id,
+          url: cleanUrl,
+          businessProfile: businessProfileData,
+        },
+      });
+    } else {
+      site = await prisma.site.update({
+        where: { id: site.id },
+        data: {
+          businessProfile: businessProfileData,
+        },
+      });
+    }
+
+    // 6. Run local SEO audits
     const auditResults = await runSeoAudits(crawledPages, cleanUrl);
 
     // 5. Create Audit database record
@@ -178,14 +249,34 @@ export async function POST(req: Request) {
         siteId: site.id,
         scorePerformance: auditResults.scorePerformance,
         scoreSeo: auditResults.scoreSeo,
+        lcpSeconds: auditResults.lcpSeconds,
+        clsScore: auditResults.clsScore,
+        inpMilliseconds: auditResults.inpMilliseconds,
         status: "pending",
       },
     });
 
     // 6. Generate improvements using Gemini AI
+    const parsedProfile = businessProfileData ? JSON.parse(businessProfileData) : null;
+    const profileText = parsedProfile ? `
+Here is the Discovered Business Intelligence Profile for this company:
+- Industry: ${parsedProfile.industry}
+- Category: ${parsedProfile.category}
+- Summary: ${parsedProfile.summary}
+- Products: ${parsedProfile.products?.join(", ") || "None listed"}
+- Services: ${parsedProfile.services?.join(", ") || "None listed"}
+- Target Audience: ${parsedProfile.targetAudience}
+- Brand Voice/Tone: ${parsedProfile.brandVoice}
+- Unique Selling Points (USPs): ${parsedProfile.usps?.join(" | ") || "None"}
+- Competitors: ${parsedProfile.competitors?.join(", ") || "None listed"}
+` : "No explicit business profile discovered yet.";
+
     const systemPrompt = `
 You are an expert AI Website Growth Agent specializing in Local Business SEO and Content Marketing.
 We have audited the website: ${cleanUrl}.
+
+${profileText}
+
 Here is the summary of the crawled pages:
 ${JSON.stringify(
   crawledPages.map((p) => ({
@@ -212,19 +303,23 @@ ${JSON.stringify(
 )}
 
 Based on this audit data, please generate:
-1. Exact fix suggestions for each page with a 'meta_title' or 'meta_description' or 'schema_markup' or 'missing_alt' or 'broken_link' issue.
+1. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', or 'duplicate_content' issue.
    - For 'meta_title' issues: Provide an optimized title tag between 30 and 60 characters.
    - For 'meta_description' issues: Provide an optimized meta description between 120 and 160 characters.
    - For 'schema_markup' issues: Provide a valid schema.org LocalBusiness or Article JSON-LD markup string.
    - For 'missing_alt' issues: Provide an optimized alt text suggestion for the image.
    - For 'broken_link' issues: Provide a recommended action or a suggested replacement URL if obvious from context.
+   - For 'heading_structure' issues: Provide a corrected heading structure outline suggestion (e.g. H1: title, H2: subtitle).
+   - For 'canonical_tag' issues: Provide the corrected self-referencing HTML canonical snippet link.
+   - For 'social_meta' issues: Provide the missing OpenGraph / Twitter meta HTML snippets (og:title, og:description, etc.).
+   - For 'duplicate_content' issues: Provide a suggested unique title or meta description alternative to resolve duplication.
    Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly.
 2. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->).
 
 Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 {
   "fixes": [
-    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link", "suggestedValue": "string" }
+    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content", "suggestedValue": "string" }
   ],
   "blogPosts": [
     { "title": "string", "content": "string", "suggestedSlug": "string" }
@@ -286,6 +381,129 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       }
     }
 
+    // Save mechanical/informational issues directly (insecure_link, image_weight, robots_sitemap for robots.txt)
+    const directIssues = auditResults.issues.filter(issue =>
+      ["insecure_link", "image_weight", "robots_sitemap"].includes(issue.type)
+    );
+    for (const issue of directIssues) {
+      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml") {
+        continue;
+      }
+      
+      let suggestedText = issue.suggestedValue?.action || issue.suggestedValue;
+      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/robots.txt") {
+        suggestedText = `Create a robots.txt file at ${cleanUrl}/robots.txt with: \n\nUser-agent: *\nAllow: /\n\nSitemap: ${cleanUrl}/sitemap.xml`;
+      }
+
+      const item = await prisma.auditItem.create({
+        data: {
+          auditId: audit.id,
+          siteId: site.id,
+          type: issue.type,
+          targetUrl: issue.targetUrl,
+          currentValue: JSON.stringify(issue.currentValue),
+          suggestedValue: suggestedText,
+          status: "pending",
+        },
+      });
+      savedItems.push(item);
+    }
+
+    // Auto-generate sitemap.xml
+    const hasSitemapIssue = auditResults.issues.some(
+      (issue) => issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml"
+    );
+    if (hasSitemapIssue) {
+      const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
+      const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
+      
+      const item = await prisma.auditItem.create({
+        data: {
+          auditId: audit.id,
+          siteId: site.id,
+          type: "robots_sitemap",
+          targetUrl: cleanUrl,
+          currentValue: JSON.stringify({ path: "/sitemap.xml", missing: true }),
+          suggestedValue: sitemapXml,
+          status: "pending",
+        },
+      });
+      savedItems.push(item);
+    }
+
+    // AI-generated internal linking suggestions
+    if (crawledPages.length > 2) {
+      console.log(`[Audit Route] Generating AI internal linking suggestions...`);
+      const pagesSummary = crawledPages.map(p => ({
+        url: p.url,
+        title: p.title,
+        existingInternalLinksOut: p.internalLinks
+      }));
+
+      const internalLinkingSchema = {
+        type: "OBJECT",
+        properties: {
+          suggestions: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                fromUrl: { type: "STRING" },
+                toUrl: { type: "STRING" },
+                anchorText: { type: "STRING" },
+                reason: { type: "STRING" },
+              },
+              required: ["fromUrl", "toUrl", "anchorText", "reason"],
+            },
+          },
+        },
+        required: ["suggestions"],
+      };
+
+      const linkingPrompt = `
+You are an expert SEO strategist. Analyze the following pages crawled from a website and suggest 3-5 high-value internal links that do NOT already exist, where the source page and target page topics are clearly related to improve navigation and distribute page authority.
+
+Pages structure:
+${JSON.stringify(pagesSummary, null, 2)}
+
+Provide suggestions as a JSON object matching this schema:
+{
+  "suggestions": [
+    { "fromUrl": "string", "toUrl": "string", "anchorText": "string", "reason": "string" }
+  ]
+}
+`;
+
+      try {
+        const linkingResponse = await generateStructuredJson<{
+          suggestions: { fromUrl: string; toUrl: string; anchorText: string; reason: string }[];
+        }>(linkingPrompt, internalLinkingSchema, currentUser.id);
+
+        if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
+          for (const sug of linkingResponse.suggestions) {
+            const item = await prisma.auditItem.create({
+              data: {
+                auditId: audit.id,
+                siteId: site.id,
+                type: "internal_linking",
+                targetUrl: sug.fromUrl,
+                currentValue: "",
+                suggestedValue: JSON.stringify({
+                  toUrl: sug.toUrl,
+                  anchorText: sug.anchorText,
+                  reason: sug.reason,
+                }),
+                status: "pending",
+              },
+            });
+            savedItems.push(item);
+          }
+        }
+      } catch (linkErr) {
+        console.error("[Internal Linking AI Error]:", linkErr);
+      }
+    }
+
     // 8. Update Audit record to completed
     const completedAudit = await prisma.audit.update({
       where: { id: audit.id },
@@ -300,8 +518,12 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       success: true,
       audit: {
         id: completedAudit.id,
+        siteId: completedAudit.siteId,
         scorePerformance: completedAudit.scorePerformance,
         scoreSeo: completedAudit.scoreSeo,
+        lcpSeconds: completedAudit.lcpSeconds,
+        clsScore: completedAudit.clsScore,
+        inpMilliseconds: completedAudit.inpMilliseconds,
         status: completedAudit.status,
         createdAt: completedAudit.createdAt,
         items: completedAudit.items,

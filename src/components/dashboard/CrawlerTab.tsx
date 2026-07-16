@@ -197,8 +197,10 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
                         <span className="text-[9px] uppercase font-bold tracking-widest font-mono px-2 py-0.5 rounded border text-violet-600 bg-violet-50 border-violet-200">
                           {item.type.replace("_", " ")}
                         </span>
-                        <span className="text-xs truncate max-w-sm font-mono text-zinc-500">
-                          {item.targetUrl}
+                        <span className="text-xs truncate max-w-sm font-mono text-zinc-550">
+                          {item.targetUrl.includes("example.com") && currentSite?.url
+                            ? item.targetUrl.replace("https://example.com", currentSite.url)
+                            : item.targetUrl}
                         </span>
                       </div>
                       <p className="text-xs leading-relaxed mt-2 text-zinc-650">

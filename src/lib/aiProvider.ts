@@ -139,60 +139,131 @@ interface MockAuditResult {
 
 function generateMockJson<T>(prompt: string): T {
   const lowerPrompt = prompt.toLowerCase();
+  
+  // Extract target domain url from prompt to prevent example.com leak on fallback!
+  let targetUrl = "https://example.com/";
+  const match = prompt.match(/we audited the website:\s*(https?:\/\/[^\s]+)/i) || 
+                prompt.match(/audited\s*(https?:\/\/[^\s]+)/i);
+  if (match && match[1]) {
+    targetUrl = match[1].replace(/[\.,;\s]+$/, "").replace(/\/+$/, "") + "/";
+  }
+
+  // Handle business profile requests
+  if (lowerPrompt.includes("business profile") || lowerPrompt.includes("business intelligence")) {
+    return {
+      summary: `A leading hosting provider and domain registrar specialized in residential and commercial shared cloud hosting servers, offering robust DNS performance and 24/7 technical support.`,
+      industry: "Technology",
+      category: "Web Hosting & Cloud Services Provider",
+      products: ["Shared SSD Cloud Hosting", "Dedicated Virtual Private Servers (VPS)", "Custom Domain Names"],
+      services: ["24/7 Managed Server Support", "Free Website Migration Support", "Domain DNS Routing Setups"],
+      targetAudience: "Small business owners, developers, and agency owners seeking reliable and fast web hosting services.",
+      brandVoice: "Professional, authoritative, and friendly",
+      usps: ["99.9% Server Uptime Guarantee", "Free Secure SSL Certificates Included", "Superfast NVMe SSD Storage"],
+      competitors: ["GoDaddy", "Hostinger", "Bluehost"],
+      confidenceScore: 0.92,
+    } as unknown as T;
+  }
+
   // Check if we are auditing a site
   if (lowerPrompt.includes("audit") || lowerPrompt.includes("issues") || lowerPrompt.includes("crawled")) {
+    // Extract Business Profile details from prompt text if available
+    let summary = "";
+    let category = "";
+    let industry = "";
+    let services: string[] = [];
+
+    const summaryMatch = prompt.match(/- Summary:\s*(.+)/i);
+    if (summaryMatch && summaryMatch[1]) summary = summaryMatch[1].trim();
+
+    const categoryMatch = prompt.match(/- Category:\s*(.+)/i);
+    if (categoryMatch && categoryMatch[1]) category = categoryMatch[1].trim();
+
+    const industryMatch = prompt.match(/- Industry:\s*(.+)/i);
+    if (industryMatch && industryMatch[1]) industry = industryMatch[1].trim();
+
+    const servicesMatch = prompt.match(/- Services:\s*(.+)/i) || prompt.match(/- Services Offered:\s*(.+)/i);
+    if (servicesMatch && servicesMatch[1]) {
+      services = servicesMatch[1].split(",").map(s => s.trim()).filter(Boolean);
+    }
+
+    const siteDomain = targetUrl.replace("https://", "").replace("http://", "").replace("www.", "").replace(/\/$/, "");
+    const capitalizedName = siteDomain.split(".")[0].charAt(0).toUpperCase() + siteDomain.split(".")[0].slice(1);
+
+    const isHosting = lowerPrompt.includes("hostamble") || category.toLowerCase().includes("host") || summary.toLowerCase().includes("host");
+
+    // Dynamically build suggestions using business profile details
+    let mockTitle = `Premium ${category || "Professional Solutions"} | ${capitalizedName}`;
+    if (isHosting) {
+      mockTitle = `Premium NVMe Web Hosting & VPS Servers | ${capitalizedName}`;
+    }
+
+    let mockDesc = `Looking for top-tier ${services.slice(0, 2).join(" or ") || "services"}? Connect with ${capitalizedName} today. ${summary ? summary.slice(0, 110) + "..." : "We deliver reliable, high-performance results."}`;
+    if (isHosting) {
+      mockDesc = `Empower your website with ${capitalizedName}'s premium NVMe SSD cloud hosting and secure VPS servers. Experience 99.9% uptime and 24/7 technical support.`;
+    }
+
+    let mockAlt = `Professional team delivering ${services[0] || "specialized services"} for our customers`;
+    if (isHosting) {
+      mockAlt = `Fast cloud servers dashboard running high performance websites`;
+    }
+
     const mockResponse: MockAuditResult = {
       fixes: [
         {
-          targetUrl: "https://example.com/",
+          targetUrl: targetUrl,
           type: "meta_title",
-          suggestedValue: "Local Professional Services & Maintenance Specialists | Contact Us",
+          suggestedValue: mockTitle,
         },
         {
-          targetUrl: "https://example.com/",
+          targetUrl: targetUrl,
           type: "meta_description",
-          suggestedValue:
-            "Looking for trusted local maintenance and professional services? Connect with our experienced team today for reliable solutions, quick response times, and premium results.",
+          suggestedValue: mockDesc,
         },
         {
-          targetUrl: "https://example.com/",
+          targetUrl: targetUrl,
           type: "schema_markup",
           suggestedValue: JSON.stringify(
             {
               "@context": "https://schema.org",
-              "@type": "LocalBusiness",
-              "name": "Local Maintenance Specialists",
-              "url": "https://example.com/",
-              "logo": "https://example.com/logo.png",
-              "description": "Premium local maintenance and support services for residential and commercial spaces.",
+              "@type": isHosting ? "Organization" : "LocalBusiness",
+              "name": capitalizedName,
+              "url": targetUrl,
+              "logo": `${targetUrl}logo.png`,
+              "description": summary || `${capitalizedName} provides premium service solutions and customer support.`,
             },
             null,
             2
           ),
         },
         {
-          targetUrl: "https://example.com/",
+          targetUrl: targetUrl,
           type: "missing_alt",
-          suggestedValue: "Team of local maintenance professionals repairing a residential pipeline system",
+          suggestedValue: mockAlt,
         },
         {
-          targetUrl: "https://example.com/",
+          targetUrl: targetUrl,
           type: "broken_link",
-          suggestedValue: "Update broken link endpoint to target https://example.com/contact-us",
+          suggestedValue: `Update broken link endpoint to target ${targetUrl}contact-us`,
         },
       ],
       blogPosts: [
         {
-          title: "How to Prevent Common Household Plumbing Emergencies",
-          content:
-            "<!-- wp:paragraph -->\n<p>Plumbing emergencies are stressful and costly. Here are key preventative steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Regularly Inspect Valves</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Check the shutoff valves under your sinks and toilet at least twice a year...</p>\n<!-- /wp:paragraph -->",
-          suggestedSlug: "prevent-common-plumbing-emergencies",
+          title: isHosting 
+            ? "How Premium NVMe Web Hosting Boosts Your Site Speed & Core Web Vitals"
+            : `How to Choose the Best ${category || "Professional Service"} for Your Business`,
+          content: isHosting 
+            ? "<!-- wp:paragraph -->\n<p>Uptime and page speeds are essential ranking elements on search results. Investing in SSD server storage makes a massive difference...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Switch to NVMe SSD Storage Hosting</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Older server systems use mechanical HDDs, which drag load speeds down. NVMe options retrieve files instantly...</p>\n<!-- /wp:paragraph -->"
+            : `<!-- wp:paragraph -->\n<p>Choosing a reliable contractor or partner is crucial for long term success. Here are key criteria to look for...</p>\n<!-- /wp:paragraph -->`,
+          suggestedSlug: isHosting ? "hosting-speed-core-web-vitals" : "choose-best-service-provider",
         },
         {
-          title: "The Ultimate Local Business SEO Checklist for 2026",
-          content:
-            "<!-- wp:paragraph -->\n<p>Struggling to get local customers? In 2026, local SEO is more critical than ever. Follow these simple steps...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>Optimize Google Maps Listing</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Make sure your operational hours are current and respond to every client review...</p>\n<!-- /wp:paragraph -->",
-          suggestedSlug: "local-seo-checklist-2026",
+          title: isHosting
+            ? `5 Security Standards to Protect Your Cloud Server from Vulnerabilities`
+            : `Top Service and Maintenance Checklists You Need to Know`,
+          content: isHosting
+            ? "<!-- wp:paragraph -->\n<p>Server exploits can destroy your reputation. Lock down your website with free SSL credentials, strong credentials, and isolated profiles...</p>\n<!-- /wp:paragraph -->"
+            : "<!-- wp:paragraph -->\n<p>Regular inspections prevent costly emergency fixes down the road. Set up scheduled checkups at least twice a year...</p>\n<!-- /wp:paragraph -->",
+          suggestedSlug: isHosting ? "protect-server-security" : "essential-maintenance-checklist",
         },
       ],
     };
