@@ -20,6 +20,40 @@ import { ChevronRight, Menu } from "lucide-react";
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [planLimitError, setPlanLimitError] = useState<{ message: string; type?: string } | null>(null);
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const response = await originalFetch(...args);
+      if (response.status === 402 || response.status === 403) {
+        const clone = response.clone();
+        clone.json().then(data => {
+          if (data && (data.error === "plan_limit" || data.error === "upgrade_required")) {
+            window.dispatchEvent(new CustomEvent("plan-limit-exceeded", {
+              detail: {
+                message: data.message || "You have reached your plan limits.",
+                type: data.error,
+              }
+            }));
+          }
+        }).catch(() => {});
+      }
+      return response;
+    };
+
+    const handlePlanLimit = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setPlanLimitError(customEvent.detail);
+    };
+
+    window.addEventListener("plan-limit-exceeded", handlePlanLimit);
+
+    return () => {
+      window.fetch = originalFetch;
+      window.removeEventListener("plan-limit-exceeded", handlePlanLimit);
+    };
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -83,6 +117,7 @@ export default function DashboardPage() {
         currentSite={data.currentSite}
         handleSubscribe={data.handleSubscribe}
         isSubscribing={data.isSubscribing}
+        allSites={data.allSites}
       />
 
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto">
@@ -255,6 +290,39 @@ export default function DashboardPage() {
       </main>
       </div>
       <Chatbot currentSite={data.currentSite} />
+
+      {planLimitError && (
+        <div className="fixed inset-0 bg-zinc-950/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border-2 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(9,9,11,1)] p-6 max-w-md w-full relative space-y-4 animate-scale-up font-mono">
+            <div className="flex items-center gap-2 text-violet-650">
+              <span className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center text-base">
+                ⚠️
+              </span>
+              <h3 className="text-xs font-bold uppercase tracking-wider">Plan Limit Reached</h3>
+            </div>
+            <p className="text-xs text-zinc-650 leading-relaxed">
+              {planLimitError.message}
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setPlanLimitError(null)}
+                className="flex-1 py-2.5 border-2 border-zinc-950 bg-white text-zinc-800 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-55"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => {
+                  setPlanLimitError(null);
+                  router.push("/#pricing");
+                }}
+                className="flex-1 py-2.5 border-2 border-zinc-950 bg-violet-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-750"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

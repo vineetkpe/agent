@@ -48,6 +48,9 @@ export async function GET(
         subscriptionActive: user.subscriptionActive,
         suspended: user.suspended,
         isAdmin: user.isAdmin,
+        plan: user.plan,
+        planSource: user.planSource,
+        planActivatedAt: user.planActivatedAt,
         createdAt: user.createdAt,
       },
       sites: user.sites,
@@ -84,9 +87,29 @@ export async function PATCH(
     const updateData: any = {};
     let auditLogMessage = "";
 
-    if (body.subscriptionActive !== undefined) {
-      updateData.subscriptionActive = !!body.subscriptionActive;
-      auditLogMessage += `Premium subscription status updated from ${targetUser.subscriptionActive} to ${!!body.subscriptionActive}. `;
+    if (body.action === "deactivate_subscription") {
+      updateData.plan = null;
+      updateData.subscriptionActive = false;
+      updateData.planSource = null;
+      auditLogMessage += `Deactivated subscription (plan: null, active: false, source: null). `;
+    } else {
+      if (body.plan !== undefined) {
+        if (body.plan === null) {
+          updateData.plan = null;
+          updateData.subscriptionActive = false;
+          updateData.planSource = null;
+          auditLogMessage += `Plan updated to null (deactivated). `;
+        } else {
+          updateData.plan = body.plan;
+          updateData.subscriptionActive = true;
+          updateData.planSource = "admin_grant";
+          updateData.planActivatedAt = new Date();
+          auditLogMessage += `Plan updated to ${body.plan} (source: admin_grant). `;
+        }
+      } else if (body.subscriptionActive !== undefined) {
+        updateData.subscriptionActive = !!body.subscriptionActive;
+        auditLogMessage += `Premium subscription status updated from ${targetUser.subscriptionActive} to ${!!body.subscriptionActive}. `;
+      }
     }
 
     if (body.suspended !== undefined) {

@@ -2,12 +2,24 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/user";
 import { prisma } from "@/lib/prisma";
 import { generateContent } from "@/lib/aiProvider";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
 
 export async function POST(req: Request) {
   try {
     const currentUser = await getCurrentUser(req);
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const limits = getEffectivePlanLimits(currentUser);
+    if (!limits.chatbot) {
+      return NextResponse.json(
+        {
+          error: "plan_limit",
+          message: "The AI chat assistant requires a paid plan. Please upgrade to access this feature.",
+        },
+        { status: 403 }
+      );
     }
 
     const { messages, siteId } = await req.json();

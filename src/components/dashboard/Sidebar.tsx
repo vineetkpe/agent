@@ -15,6 +15,7 @@ interface SidebarProps {
   currentSite: any;
   handleSubscribe: () => void;
   isSubscribing: boolean;
+  allSites?: any[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentSite,
   handleSubscribe,
   isSubscribing,
+  allSites = [],
 }) => {
   const router = useRouter();
 
@@ -146,6 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           currentUser={currentUser}
           handleSubscribe={handleSubscribe}
           isSubscribing={isSubscribing}
+          allSites={allSites}
         />
 
 

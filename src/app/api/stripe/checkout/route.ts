@@ -16,6 +16,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    let plan: string;
+    try {
+      const body = await req.json();
+      plan = body.plan;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    if (!plan || !["starter", "growth", "agency"].includes(plan)) {
+      return NextResponse.json(
+        { error: "Invalid or missing plan parameter. Must be 'starter', 'growth', or 'agency'." },
+        { status: 400 }
+      );
+    }
+
+    const PLAN_DETAILS: Record<string, { name: string; amount: number; description: string }> = {
+      starter: {
+        name: "Starter Plan",
+        amount: 1900,
+        description: "1 website, manual audits (24h cooldown), full AI fixes, WordPress one-click apply, AI chat assistant",
+      },
+      growth: {
+        name: "Growth Plan",
+        amount: 4900,
+        description: "Up to 3 websites, everything in Starter, weekly automatic re-scan + email digest, downloadable PDF SEO reports",
+      },
+      agency: {
+        name: "Agency Plan",
+        amount: 9900,
+        description: "Up to 10 websites, everything in Growth, white-label PDF reports (your logo, not ours), fastest audit cooldown",
+      },
+    };
+
+    const selectedPlan = PLAN_DETAILS[plan];
+
     if (isMock || !stripe) {
       // SAFETY-1: Stripe mock-mode must fail loudly in production instead of granting free access
       if (process.env.NODE_ENV === "production") {
@@ -26,12 +61,17 @@ export async function POST(req: Request) {
         );
       }
 
-      console.log(`[Stripe Checkout] Simulating Stripe Checkout subscription flow for dev user ${currentUser.email} (Mock Mode).`);
+      console.log(`[Stripe Checkout] Simulating Stripe Checkout subscription flow for dev user ${currentUser.email} (Mock Mode: Plan ${plan}).`);
       
       // Mock flow: immediately toggle subscriptionActive to true in local SQLite DB
       await prisma.user.update({
         where: { id: currentUser.id },
-        data: { subscriptionActive: true },
+        data: {
+          subscriptionActive: true,
+          plan: plan,
+          planSource: "stripe",
+          planActivatedAt: new Date(),
+        },
       });
 
       return NextResponse.json({
@@ -50,10 +90,10 @@ export async function POST(req: Request) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "AI Website Growth Agent Partner",
-              description: "Recurring monthly subscription for SEO audits and blog drafts updates.",
+              name: selectedPlan.name,
+              description: selectedPlan.description,
             },
-            unit_amount: 1900, // $19.00
+            unit_amount: selectedPlan.amount,
             recurring: {
               interval: "month",
             },
@@ -67,6 +107,7 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/#pricing`,
       metadata: {
         userId: currentUser.id,
+        plan: plan,
       },
     });
 

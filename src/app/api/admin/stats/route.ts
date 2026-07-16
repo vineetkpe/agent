@@ -11,10 +11,36 @@ export async function GET(req: Request) {
 
     // 1. Basic Stats
     const totalUsers = await prisma.user.count();
+    
+    // Calculate MRR strictly from users where planSource='stripe'
+    const stripeUsers = await prisma.user.findMany({
+      where: {
+        subscriptionActive: true,
+        planSource: "stripe",
+      },
+      select: {
+        plan: true,
+      },
+    });
+
+    let estimatedMrr = 0;
+    stripeUsers.forEach((u) => {
+      const p = (u.plan || "").toLowerCase();
+      if (p === "starter") estimatedMrr += 19;
+      else if (p === "growth") estimatedMrr += 49;
+      else if (p === "agency") estimatedMrr += 99;
+    });
+
+    // Add a separate stat: 'Comped users' count (planSource='admin_grant')
+    const compedUsersCount = await prisma.user.count({
+      where: {
+        planSource: "admin_grant",
+      },
+    });
+
     const activeSubscriptions = await prisma.user.count({
       where: { subscriptionActive: true },
     });
-    const estimatedMrr = activeSubscriptions * 19;
     const totalSites = await prisma.site.count();
     const totalAudits = await prisma.audit.count();
 
@@ -161,6 +187,9 @@ export async function GET(req: Request) {
         id: true,
         email: true,
         subscriptionActive: true,
+        plan: true,
+        planSource: true,
+        suspended: true,
         createdAt: true,
         sites: {
           select: {
@@ -195,6 +224,9 @@ export async function GET(req: Request) {
         email: user.email,
         createdAt: user.createdAt,
         subscriptionActive: user.subscriptionActive,
+        plan: user.plan,
+        planSource: user.planSource,
+        suspended: user.suspended,
         siteCount: user.sites.length,
         lastAuditDate,
       };
@@ -204,6 +236,7 @@ export async function GET(req: Request) {
       totalUsers,
       activeSubscriptions,
       estimatedMrr,
+      compedUsersCount,
       totalSites,
       totalAudits,
       wordpressConnectedSites,

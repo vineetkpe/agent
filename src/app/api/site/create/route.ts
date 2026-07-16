@@ -2,12 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
 
 export async function POST(req: Request) {
   try {
     const currentUser = await getCurrentUser(req);
     if (!currentUser) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const limits = getEffectivePlanLimits(currentUser);
+    const existingSitesCount = await prisma.site.count({
+      where: { userId: currentUser.id },
+    });
+
+    if (existingSitesCount >= limits.maxSites) {
+      return NextResponse.json(
+        {
+          error: "plan_limit",
+          message: `Your current plan allows up to ${limits.maxSites} site(s). You have already registered ${existingSitesCount} site(s). Please upgrade to add more.`,
+          limit: limits.maxSites,
+          current: existingSitesCount,
+        },
+        { status: 403 }
+      );
     }
 
     const { url } = await req.json();

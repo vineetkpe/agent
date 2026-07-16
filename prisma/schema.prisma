@@ -17,6 +17,9 @@ model User {
   subscriptionActive Boolean @default(false)
   isAdmin          Boolean   @default(false)
   suspended        Boolean   @default(false)
+  plan             String?
+  planSource       String?
+  planActivatedAt  DateTime?
   createdAt        DateTime  @default(now())
   sites            Site[]
 }
@@ -55,6 +58,7 @@ model Audit {
   status              String      @default("pending") // pending, completed, failed
   aiScanError         String?
   pageSpeedScanError  String?
+  businessProfileError String?
   createdAt           DateTime    @default(now())
   items               AuditItem[]
 }

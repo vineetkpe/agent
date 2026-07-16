@@ -6,6 +6,7 @@ import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -293,39 +294,71 @@ export async function POST(req: Request) {
     });
 
     // COST-1: Add a per-site audit cooldown to prevent cost/quota abuse
-    if (site) {
-      const latestAudit = await prisma.audit.findFirst({
-        where: { siteId: site.id },
-        orderBy: { createdAt: "desc" },
-      });
+    const limits = getEffectivePlanLimits(currentUser);
+    const isAdmin = currentUser.isAdmin || (currentUser.email && currentUser.email.toLowerCase() === "vineetkpe@gmail.com");
 
-      if (latestAudit) {
-        let cooldownMinutes = 5;
-        try {
-          const settings = await prisma.appSettings.findFirst({
-            where: { id: "singleton" }
-          });
-          if (settings && settings.auditCooldownMinutes !== null && settings.auditCooldownMinutes !== undefined) {
-            cooldownMinutes = settings.auditCooldownMinutes;
-          } else if (process.env.AUDIT_COOLDOWN_MINUTES) {
-            cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES, 10);
-          }
-        } catch (settingsErr) {
-          console.error("[Audit Route] Failed to load AppSettings:", settingsErr);
-          if (process.env.AUDIT_COOLDOWN_MINUTES) {
-            cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES, 10);
-          }
-        }
-
-        const nextAllowedTime = latestAudit.createdAt.getTime() + cooldownMinutes * 60 * 1000;
-        const now = Date.now();
-        if (now < nextAllowedTime) {
-          const diffMs = nextAllowedTime - now;
-          const diffMins = Math.ceil(diffMs / 60000);
+    if (!isAdmin) {
+      // ENFORCE-2: Lifetime audit cap for free-tier users (plan is null)
+      if (!currentUser.plan) {
+        const completedAuditsCount = await prisma.audit.count({
+          where: {
+            site: {
+              userId: currentUser.id,
+            },
+            status: "completed",
+          },
+        });
+        if (completedAuditsCount >= 1) {
           return NextResponse.json(
-            { error: `Site was audited recently. Please wait ${diffMins} minute(s) before running another audit.` },
-            { status: 429 }
+            {
+              error: "upgrade_required",
+              message: "Free tier is limited to 1 lifetime completed audit. Please upgrade to run additional audits.",
+            },
+            { status: 402 }
           );
+        }
+      }
+
+      if (site) {
+        const latestAudit = await prisma.audit.findFirst({
+          where: { siteId: site.id },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (latestAudit) {
+          let cooldownMinutes = limits.cooldownMinutes;
+
+          // (1) AppSettings.auditCooldownMinutes if explicitly set by admin wins
+          try {
+            const settings = await prisma.appSettings.findFirst({
+              where: { id: "singleton" }
+            });
+            if (settings && settings.auditCooldownMinutes !== null && settings.auditCooldownMinutes !== undefined) {
+              cooldownMinutes = settings.auditCooldownMinutes;
+            }
+          } catch (settingsErr) {
+            console.error("[Audit Route] Failed to load AppSettings:", settingsErr);
+          }
+
+          // If no admin settings, fallback to (3) env AUDIT_COOLDOWN_MINUTES default
+          if (cooldownMinutes === null || cooldownMinutes === undefined) {
+            if (process.env.AUDIT_COOLDOWN_MINUTES) {
+              cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES, 10);
+            } else {
+              cooldownMinutes = 5; // global safety default fallback
+            }
+          }
+
+          const nextAllowedTime = latestAudit.createdAt.getTime() + cooldownMinutes * 60 * 1000;
+          const now = Date.now();
+          if (now < nextAllowedTime) {
+            const diffMs = nextAllowedTime - now;
+            const diffMins = Math.ceil(diffMs / 60000);
+            return NextResponse.json(
+              { error: `Site was audited recently. Please wait ${diffMins} minute(s) before running another audit.` },
+              { status: 429 }
+            );
+          }
         }
       }
     }
@@ -340,13 +373,15 @@ export async function POST(req: Request) {
 
     // 4. Run Business Intelligence analysis
     let businessProfileData: string | null = null;
+    let businessProfileError: string | null = null;
     try {
       console.log(`[Audit Route] Analyzing business profile for ${cleanUrl}...`);
       const profile = await analyzeBusinessProfile(crawledPages, cleanUrl, currentUser.id);
       businessProfileData = JSON.stringify(profile);
       console.log(`[Audit Route] Discovered Business Profile (Confidence: ${profile.confidenceScore}): ${profile.category}`);
-    } catch (biError) {
+    } catch (biError: any) {
       console.error("[Audit Route] Business Intelligence layer failure:", biError);
+      businessProfileError = biError instanceof Error ? biError.message : String(biError);
     }
 
     // 5. Create or update Site record
@@ -359,11 +394,13 @@ export async function POST(req: Request) {
         },
       });
     } else {
+      const updateData: any = {};
+      if (businessProfileData !== null) {
+        updateData.businessProfile = businessProfileData;
+      }
       site = await prisma.site.update({
         where: { id: site.id },
-        data: {
-          businessProfile: businessProfileData,
-        },
+        data: updateData,
       });
     }
 
@@ -377,6 +414,7 @@ export async function POST(req: Request) {
         scorePerformance: 0,
         scoreSeo: auditResults.scoreSeo,
         status: "pending",
+        businessProfileError: businessProfileError,
       },
     });
 

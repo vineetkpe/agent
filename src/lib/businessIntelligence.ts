@@ -109,18 +109,6 @@ Extract and return exactly a JSON object matching this schema:
     return profile;
   } catch (error) {
     console.error("[Business Intelligence API Error]:", error);
-    // Return a default structural fallback rather than crashing
-    return {
-      summary: `Business profile for ${siteUrl}`,
-      industry: "Unknown",
-      category: "Website Owner",
-      products: [],
-      services: [],
-      targetAudience: "General visitors",
-      brandVoice: "Neutral",
-      usps: [],
-      competitors: [],
-      confidenceScore: 0.1,
-    };
+    throw error;
   }
 }

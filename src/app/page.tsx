@@ -1,16 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Header from "@/components/landing/Header";
 import Hero from "@/components/landing/Hero";
-import CrawlerSandbox from "@/components/landing/CrawlerSandbox";
-import LiveUrlStreamer from "@/components/landing/LiveUrlStreamer";
-import OutlineEditorDemo from "@/components/landing/OutlineEditorDemo";
-import SevenDayScheduler from "@/components/landing/SevenDayScheduler";
 import FeatureGrid from "@/components/landing/FeatureGrid";
 import WorkflowSteps from "@/components/landing/WorkflowSteps";
 import Pricing from "@/components/landing/Pricing";
-import Faq from "@/components/landing/Faq";
 import Footer from "@/components/landing/Footer";
+
+const CrawlerSandbox = dynamic(() => import("@/components/landing/CrawlerSandbox"), { ssr: false });
+const LiveUrlStreamer = dynamic(() => import("@/components/landing/LiveUrlStreamer"), { ssr: false });
+const OutlineEditorDemo = dynamic(() => import("@/components/landing/OutlineEditorDemo"), { ssr: false });
+const SevenDayScheduler = dynamic(() => import("@/components/landing/SevenDayScheduler"), { ssr: false });
+const Faq = dynamic(() => import("@/components/landing/Faq"), { ssr: false });
 
 export default function Home() {
   return (

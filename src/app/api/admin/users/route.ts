@@ -61,6 +61,9 @@ export async function GET(req: Request) {
         createdAt: u.createdAt,
         siteCount: u.sites.length,
         latestAuditDate,
+        plan: u.plan,
+        planSource: u.planSource,
+        planActivatedAt: u.planActivatedAt,
       };
     });
 

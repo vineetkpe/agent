@@ -13,6 +13,9 @@ interface UserEntry {
   createdAt: string;
   siteCount: number;
   latestAuditDate: string | null;
+  plan?: string | null;
+  planSource?: string | null;
+  planActivatedAt?: string | null;
 }
 
 export const UserManagementPanel: React.FC = () => {
@@ -80,9 +83,9 @@ export const UserManagementPanel: React.FC = () => {
     }
   };
 
-  const handleTogglePremium = async (user: UserEntry) => {
+  const handleUpdatePlan = async (user: UserEntry, newPlan: string | null) => {
     try {
-      setActionLoading(`premium-${user.id}`);
+      setActionLoading(`plan-${user.id}`);
       setFeedback(null);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
@@ -93,19 +96,68 @@ export const UserManagementPanel: React.FC = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ subscriptionActive: !user.subscriptionActive }),
+        body: JSON.stringify({ plan: newPlan }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to update premium subscription.");
+        throw new Error(data.error || "Failed to update user plan.");
       }
 
+      const resData = await res.json();
       setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, subscriptionActive: !u.subscriptionActive } : u))
+        prev.map((u) => (u.id === user.id ? { 
+          ...u, 
+          plan: resData.user.plan, 
+          subscriptionActive: resData.user.subscriptionActive, 
+          planSource: resData.user.planSource,
+          planActivatedAt: resData.user.planActivatedAt 
+        } : u))
       );
       setFeedback({
-        text: `Successfully ${user.subscriptionActive ? "revoked" : "granted"} premium features for ${user.email}.`,
+        text: `Successfully updated plan for ${user.email} to ${newPlan ? newPlan.toUpperCase() : "None (Free)"}.`,
+        isError: false,
+      });
+    } catch (err: any) {
+      setFeedback({ text: err.message || "Request failed.", isError: true });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeactivateSubscription = async (user: UserEntry) => {
+    try {
+      setActionLoading(`deactivate-${user.id}`);
+      setFeedback(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: "deactivate_subscription" }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to deactivate subscription.");
+      }
+
+      const resData = await res.json();
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { 
+          ...u, 
+          plan: resData.user.plan, 
+          subscriptionActive: resData.user.subscriptionActive, 
+          planSource: resData.user.planSource,
+          planActivatedAt: resData.user.planActivatedAt 
+        } : u))
+      );
+      setFeedback({
+        text: `Successfully deactivated subscription for ${user.email}.`,
         isError: false,
       });
     } catch (err: any) {
@@ -339,8 +391,13 @@ export const UserManagementPanel: React.FC = () => {
                           {user.isAdmin && (
                             <Badge variant="violet" className="text-[8px] px-1.5 py-0 uppercase">Admin</Badge>
                           )}
-                          {user.suspended ? (
+                          {user.suspended && (
                             <Badge variant="zinc" className="text-[8px] px-1.5 py-0 uppercase bg-red-100 text-red-700 border-red-200">Suspended</Badge>
+                          )}
+                          {user.plan ? (
+                            <Badge variant="emerald" className="text-[8px] px-1.5 py-0 uppercase bg-emerald-100 text-emerald-800 border-emerald-200">
+                              {user.plan} ({user.planSource || "stripe"})
+                            </Badge>
                           ) : user.subscriptionActive ? (
                             <Badge variant="emerald" className="text-[8px] px-1.5 py-0 uppercase">Premium</Badge>
                           ) : (
@@ -354,14 +411,25 @@ export const UserManagementPanel: React.FC = () => {
                       </td>
                       <td className="p-4">{new Date(user.createdAt).toLocaleDateString()}</td>
                       <td className="p-4 text-right space-x-1.5 whitespace-nowrap">
-                        <button
-                          onClick={() => handleTogglePremium(user)}
-                          disabled={actionLoading === `premium-${user.id}`}
-                          className="px-2 py-1 border-2 border-zinc-950 bg-white text-zinc-800 font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-55 flex-inline items-center gap-1 disabled:opacity-50"
-                          title={user.subscriptionActive ? "Revoke Premium Status" : "Grant Comp Premium Status"}
+                        <select
+                          value={user.plan || ""}
+                          onChange={(e) => handleUpdatePlan(user, e.target.value || null)}
+                          disabled={actionLoading !== null}
+                          className="px-2 py-1 border-2 border-zinc-950 bg-white text-zinc-800 font-bold text-[9px] uppercase tracking-wider rounded-lg focus:outline-none transition-all disabled:opacity-50 inline-block align-middle"
                         >
-                          <Star className={`w-2.5 h-2.5 inline mr-0.5 ${user.subscriptionActive ? "text-amber-500 fill-amber-500" : "text-zinc-400"}`} />
-                          Comp Premium
+                          <option value="">None (Free)</option>
+                          <option value="starter">Starter</option>
+                          <option value="growth">Growth</option>
+                          <option value="agency">Agency</option>
+                        </select>
+
+                        <button
+                          onClick={() => handleDeactivateSubscription(user)}
+                          disabled={actionLoading !== null || (!user.subscriptionActive && !user.plan)}
+                          className="px-2 py-1 border-2 border-zinc-950 bg-zinc-100 text-zinc-850 font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-200 disabled:opacity-50 inline-block align-middle"
+                          title="Deactivate Subscription"
+                        >
+                          Deactivate
                         </button>
 
                         <button
@@ -425,7 +493,9 @@ export const UserManagementPanel: React.FC = () => {
                                 <div className="p-3 border-2 border-zinc-950 bg-white rounded-xl shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
                                   <span className="text-[9px] uppercase text-zinc-400 font-bold">Account Plan</span>
                                   <p className="font-bold text-zinc-900 mt-0.5">
-                                    {expandedUserData.user?.subscriptionActive ? "Premium subscription" : "Free standard tier"}
+                                    {expandedUserData.user?.plan 
+                                      ? `${expandedUserData.user.plan.toUpperCase()} (${expandedUserData.user.planSource || 'stripe'})`
+                                      : expandedUserData.user?.subscriptionActive ? "Premium" : "Free standard tier"}
                                   </p>
                                 </div>
                               </div>

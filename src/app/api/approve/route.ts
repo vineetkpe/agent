@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { publishWpPost, resolveWpPostIdFromUrl, updateWpTitle, updateWpMetaDescription } from "@/lib/wordpress";
 import { getCurrentUser } from "@/lib/user";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
 
 export async function POST(req: Request) {
   try {
@@ -53,6 +54,13 @@ export async function POST(req: Request) {
 
       // Check if WordPress is connected
       if (site.wpUrl && site.wpUsername && site.wpAppPasswordEncrypted) {
+        const limits = getEffectivePlanLimits(currentUser);
+        if (!limits.wpAutoApply) {
+          return NextResponse.json(
+            { error: "plan_limit", message: "WordPress auto-apply requires a paid plan" },
+            { status: 403 }
+          );
+        }
         console.log(`[Auto-Apply] WordPress is connected for ${site.url}. Pushing post...`);
         
         try {
@@ -131,6 +139,13 @@ export async function POST(req: Request) {
     } else if (item.type === "meta_title" || item.type === "meta_description") {
       const site = item.site;
       if (site.wpUrl && site.wpUsername && site.wpAppPasswordEncrypted) {
+        const limits = getEffectivePlanLimits(currentUser);
+        if (!limits.wpAutoApply) {
+          return NextResponse.json(
+            { error: "plan_limit", message: "WordPress auto-apply requires a paid plan" },
+            { status: 403 }
+          );
+        }
         console.log(`[Auto-Apply] WordPress connected. Resolving post ID for URL: ${item.targetUrl}`);
         try {
           const appPassword = decrypt(site.wpAppPasswordEncrypted);
