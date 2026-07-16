@@ -4,6 +4,7 @@ import { encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
   try {
@@ -11,7 +12,16 @@ export async function POST(req: Request) {
     if (!currentUser) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-
+    const isAdmin = currentUser.isAdmin || (currentUser.email && currentUser.email.toLowerCase() === "vineetkpe@gmail.com");
+    if (!isAdmin) {
+      const allowed = await checkRateLimit(currentUser.id, "wp_connect", 10, 60);
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "Too many WordPress connection attempts. Limit is 10 per hour." },
+          { status: 429 }
+        );
+      }
+    }
     const { wpUrl, username, appPassword, siteUrl } = await req.json();
 
     if (!wpUrl || !username || !appPassword || !siteUrl) {

@@ -11,17 +11,19 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique
-  stripeCustomerId String?
-  subscriptionActive Boolean @default(false)
-  isAdmin          Boolean   @default(false)
-  suspended        Boolean   @default(false)
-  plan             String?
-  planSource       String?
-  planActivatedAt  DateTime?
-  createdAt        DateTime  @default(now())
-  sites            Site[]
+  id                      String    @id @default(uuid())
+  email                   String    @unique
+  stripeCustomerId        String?
+  subscriptionActive      Boolean   @default(false)
+  isAdmin                 Boolean   @default(false)
+  suspended               Boolean   @default(false)
+  plan                    String?
+  planSource              String?
+  planActivatedAt         DateTime?
+  onboardingCompletedAt   DateTime?
+  lastNotificationCheckAt DateTime?
+  createdAt               DateTime  @default(now())
+  sites                   Site[]
 }
 
 model Site {
@@ -103,5 +105,14 @@ model ImpersonationLog {
   targetUserId String
   reason       String?
   startedAt    DateTime @default(now())
+}
+
+model RateLimitLog {
+  id        String   @id @default(uuid())
+  userId    String
+  routeKey  String
+  createdAt DateTime @default(now())
+
+  @@index([userId, routeKey, createdAt])
 }
 

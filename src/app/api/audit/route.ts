@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { sanitizeHtml } from "@/lib/sanitizer";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -250,6 +252,9 @@ export async function GET(req: Request) {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,
         isAdmin: currentUser.isAdmin,
+        plan: currentUser.plan,
+        onboardingCompletedAt: currentUser.onboardingCompletedAt,
+        lastNotificationCheckAt: currentUser.lastNotificationCheckAt,
       },
     });
   } catch (error: any) {
@@ -296,6 +301,16 @@ export async function POST(req: Request) {
     // COST-1: Add a per-site audit cooldown to prevent cost/quota abuse
     const limits = getEffectivePlanLimits(currentUser);
     const isAdmin = currentUser.isAdmin || (currentUser.email && currentUser.email.toLowerCase() === "vineetkpe@gmail.com");
+
+    if (!isAdmin) {
+      const allowed = await checkRateLimit(currentUser.id, "audit", 10, 60);
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "Too many audit requests. Limit is 10 audits per hour." },
+          { status: 429 }
+        );
+      }
+    }
 
     if (!isAdmin) {
       // ENFORCE-2: Lifetime audit cap for free-tier users (plan is null)
@@ -529,6 +544,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       // Save Blog Post suggestions
       if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
         for (const post of aiResponse.blogPosts) {
+          const sanitizedContent = sanitizeHtml(post.content);
           await prisma.auditItem.create({
             data: {
               auditId: audit.id,
@@ -538,7 +554,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
               currentValue: JSON.stringify({ status: "not_created" }),
               suggestedValue: JSON.stringify({
                 title: post.title,
-                content: post.content,
+                content: sanitizedContent,
                 slug: post.suggestedSlug,
                 targetKeyword: post.targetKeyword,
               }),

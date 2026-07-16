@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CheckCircle, XCircle, Clock, Copy, Check, Zap, AlertTriangle, Clipboard, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Copy, Check, Zap, AlertTriangle, Clipboard, ExternalLink, ChevronDown, ChevronUp, HeartPulse } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -10,6 +10,7 @@ interface RecommendationsTabProps {
   handleCopyText: (text: string, id: string) => void;
   copiedId: string | null;
   currentSite?: any;
+  selectTab: (tab: any) => void;
 }
 
 const getRecommendationDetails = (type: string) => {
@@ -121,6 +122,7 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
   handleCopyText,
   copiedId,
   currentSite,
+  selectTab,
 }) => {
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
 
@@ -162,8 +164,29 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
       </div>
 
       {metaFixes.length === 0 ? (
-        <Card variant="flat" className="p-16 text-center text-zinc-500">
-          No SEO tag recommendation log found. Complete a site crawl diagnostics run first!
+        <Card variant="flat" className="p-16 text-center space-y-6 max-w-2xl mx-auto border-2 border-dashed border-zinc-300 bg-zinc-50/20 rounded-2xl">
+          <div className="mx-auto w-14 h-14 rounded-full bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
+            <HeartPulse className="w-7 h-7" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-zinc-900 font-mono uppercase tracking-wider">
+              No Recommendations Found
+            </h3>
+            <p className="text-xs text-zinc-550 leading-relaxed font-mono max-w-md mx-auto">
+              We haven't found any SEO gaps or optimization fixes yet. Start a website crawl diagnostics scan to generate structured recommendations.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => selectTab("crawler")}
+              type="button"
+              className="px-5 py-2.5 border-2 border-zinc-950 bg-violet-650 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-650/90 cursor-pointer"
+            >
+              Run your first audit
+            </button>
+          </div>
         </Card>
       ) : (
         <div className="space-y-4 animate-fade-in">

@@ -2,6 +2,7 @@ import React from "react";
 import { FileText, Check, Copy } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
+import { sanitizeHtml } from "@/lib/sanitizer";
 
 interface ContentTabProps {
   currentAudit: any;
@@ -10,6 +11,7 @@ interface ContentTabProps {
   setPreviewBlogPost: (post: any) => void;
   handleCopyText: (text: string, id: string) => void;
   copiedId: string | null;
+  selectTab: (tab: any) => void;
 }
 
 export const ContentTab: React.FC<ContentTabProps> = ({
@@ -19,6 +21,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({
   setPreviewBlogPost,
   handleCopyText,
   copiedId,
+  selectTab,
 }) => {
   const contentDrafts =
     currentAudit?.items?.filter((item: any) => item.type === "blog_post") || [];
@@ -76,7 +79,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                     <p
                       className="text-[11px] leading-relaxed line-clamp-3 mt-1 text-zinc-650"
                       dangerouslySetInnerHTML={{
-                        __html: post.content?.substring(0, 150) + "...",
+                        __html: sanitizeHtml(post.content || "").substring(0, 150) + "...",
                       }}
                     />
                   </div>
@@ -97,15 +100,28 @@ export const ContentTab: React.FC<ContentTabProps> = ({
           </div>
         </Card>
       ) : (
-        <Card variant="flat" className="p-16 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full border flex items-center justify-center mx-auto bg-zinc-100 border-zinc-200 text-zinc-550">
-            <FileText className="w-6 h-6" />
+        <Card variant="flat" className="p-16 text-center space-y-6 max-w-2xl mx-auto border-2 border-dashed border-zinc-300 bg-zinc-50/20 rounded-2xl">
+          <div className="mx-auto w-14 h-14 rounded-full bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
+            <FileText className="w-7 h-7" />
           </div>
-          <div>
-            <h3 className="font-semibold text-zinc-700">No blog drafts available</h3>
-            <p className="text-zinc-550 text-xs mt-1">
-              Complete a website crawl diagnostics run first to generate blog post drafts targeting content gaps!
+          
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-zinc-900 font-mono uppercase tracking-wider">
+              No Blog Drafts Available
+            </h3>
+            <p className="text-xs text-zinc-550 leading-relaxed font-mono max-w-md mx-auto">
+              We haven't generated any blog drafts yet. Start a website crawl diagnostics scan to let our AI write target article drafts for your keywords.
             </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => selectTab("crawler")}
+              type="button"
+              className="px-5 py-2.5 border-2 border-zinc-950 bg-violet-650 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-650/90 cursor-pointer"
+            >
+              Run crawler audit
+            </button>
           </div>
         </Card>
       )}
@@ -135,7 +151,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({
             <div className="p-6 overflow-y-auto space-y-4 prose max-w-none text-xs leading-relaxed text-zinc-850">
               <div
                 className="space-y-4"
-                dangerouslySetInnerHTML={{ __html: previewBlogPost.content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBlogPost.content || "") }}
               />
             </div>
 

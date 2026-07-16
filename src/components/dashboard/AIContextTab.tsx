@@ -8,12 +8,14 @@ interface AIContextTabProps {
   currentSite: any;
   currentAudit: any;
   fetchInitialData: (siteId?: string) => Promise<void>;
+  selectTab: (tab: any) => void;
 }
 
 export const AIContextTab: React.FC<AIContextTabProps> = ({
   currentSite,
   currentAudit,
   fetchInitialData,
+  selectTab,
 }) => {
   const [instructions, setInstructions] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -93,8 +95,29 @@ export const AIContextTab: React.FC<AIContextTabProps> = ({
       </div>
 
       {!currentSite ? (
-        <Card variant="flat" className="p-16 text-center text-zinc-500">
-          <p className="text-sm italic">No active site context loaded. Please run a crawl audit first!</p>
+        <Card variant="flat" className="p-16 text-center space-y-6 max-w-2xl mx-auto border-2 border-dashed border-zinc-300 bg-zinc-50/20 rounded-2xl">
+          <div className="mx-auto w-14 h-14 rounded-full bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
+            <Database className="w-7 h-7" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-zinc-900 font-mono uppercase tracking-wider">
+              No Site Context Loaded
+            </h3>
+            <p className="text-xs text-zinc-550 leading-relaxed font-mono max-w-md mx-auto">
+              We haven't parsed your business profile yet. Add a website and run an audit scan to extract structured business facts and custom SEO guidelines.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => selectTab("sites")}
+              type="button"
+              className="px-5 py-2.5 border-2 border-zinc-950 bg-violet-650 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-650/90 cursor-pointer"
+            >
+              Add your website
+            </button>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -16,6 +16,7 @@ interface SidebarProps {
   handleSubscribe: () => void;
   isSubscribing: boolean;
   allSites?: any[];
+  currentAudit?: any;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   handleSubscribe,
   isSubscribing,
   allSites = [],
+  currentAudit = null,
 }) => {
   const router = useRouter();
 
@@ -36,46 +38,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.location.replace("/login");
   };
 
-  const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
+  const sections = [
     {
-      id: "overview",
-      label: "Agent Activity",
-      icon: <Activity className="w-4 h-4" />,
+      title: "Workspace",
+      items: [
+        { id: "overview", label: "Agent Activity", icon: <Activity className="w-4 h-4" /> },
+        { id: "performance", label: "SEO Analytics", icon: <BarChart2 className="w-4 h-4" /> },
+      ],
     },
     {
-      id: "performance",
-      label: "SEO Analytics",
-      icon: <BarChart2 className="w-4 h-4" />,
+      title: "Audit & Fix",
+      items: [
+        { id: "crawler", label: "Site Crawler (Core)", icon: <Globe className="w-4 h-4" /> },
+        { id: "recommendations", label: "AI Recommendations", icon: <HeartPulse className="w-4 h-4" />, hasBadge: true },
+        { id: "content", label: "AI Content Suite", icon: <FileText className="w-4 h-4" /> },
+      ],
     },
     {
-      id: "sites",
-      label: "My Audited Sites",
-      icon: <Layers className="w-4 h-4" />,
-    },
-    {
-      id: "context",
-      label: "AI Agent Context",
-      icon: <Database className="w-4 h-4" />,
-    },
-    {
-      id: "crawler",
-      label: "Site Crawler (Core)",
-      icon: <Globe className="w-4 h-4" />,
-    },
-    {
-      id: "recommendations",
-      label: "AI Recommendations",
-      icon: <HeartPulse className="w-4 h-4" />,
-    },
-    {
-      id: "content",
-      label: "AI Content Suite",
-      icon: <FileText className="w-4 h-4" />,
-    },
-    {
-      id: "connections",
-      label: "Connections",
-      icon: <Settings className="w-4 h-4" />,
+      title: "Setup",
+      items: [
+        { id: "sites", label: "My Audited Sites", icon: <Layers className="w-4 h-4" /> },
+        { id: "context", label: "AI Agent Context", icon: <Database className="w-4 h-4" /> },
+        { id: "connections", label: "Connections", icon: <Settings className="w-4 h-4" /> },
+      ],
     },
   ];
 
@@ -115,21 +100,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Sidebar Nav */}
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => selectTab(item.id)}
-              type="button"
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
-                activeTab === item.id
-                  ? "bg-violet-50 border-violet-100 text-violet-755 font-bold shadow-sm"
-                  : "text-zinc-550 hover:bg-zinc-100 hover:text-zinc-900 border-transparent"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
+        <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
+          {sections.map((sec, idx) => (
+            <div key={idx} className="space-y-1.5">
+              <span className="px-4 text-[9px] font-bold text-zinc-400 uppercase tracking-widest font-mono block mb-2">
+                {sec.title}
+              </span>
+              {sec.items.map((item) => {
+                const isRecs = item.hasBadge;
+                const pendingCount = isRecs && currentAudit?.items
+                  ? currentAudit.items.filter((i: any) => i.status === "pending").length
+                  : 0;
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => selectTab(item.id as TabType)}
+                    type="button"
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 border ${
+                      activeTab === item.id
+                        ? "bg-violet-50 border-violet-100 text-violet-755 font-bold shadow-sm"
+                        : "text-zinc-550 hover:bg-zinc-100 hover:text-zinc-900 border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    {isRecs && pendingCount > 0 && (
+                      <span className="bg-rose-500 text-white text-[9px] font-black font-mono px-3 py-0.5 rounded-full shadow-sm animate-pulse">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ))}
 
           {currentUser?.isAdmin && (
@@ -149,6 +155,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           handleSubscribe={handleSubscribe}
           isSubscribing={isSubscribing}
           allSites={allSites}
+          currentSite={currentSite}
+          currentAudit={currentAudit}
         />
 
 

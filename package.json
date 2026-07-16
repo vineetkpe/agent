@@ -13,6 +13,7 @@
     "@prisma/client": "6.19.3",
     "@supabase/supabase-js": "^2.109.0",
     "cheerio": "^1.2.0",
+    "isomorphic-dompurify": "^3.18.0",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
     "react": "19.2.4",

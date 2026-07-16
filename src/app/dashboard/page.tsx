@@ -15,6 +15,8 @@ import { SitesTab } from "@/components/dashboard/SitesTab";
 import { AIContextTab } from "@/components/dashboard/AIContextTab";
 import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { ChevronRight, Menu } from "lucide-react";
 
 export default function DashboardPage() {
@@ -54,6 +56,22 @@ export default function DashboardPage() {
       window.removeEventListener("plan-limit-exceeded", handlePlanLimit);
     };
   }, []);
+
+  const handleDismissOnboarding = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch("/api/user/onboarding", { method: "POST", headers });
+      if (res.ok) {
+        await data.fetchInitialData(data.selectedSiteId || undefined);
+      }
+    } catch (err) {
+      console.error("Failed to dismiss onboarding:", err);
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -118,6 +136,7 @@ export default function DashboardPage() {
         handleSubscribe={data.handleSubscribe}
         isSubscribing={data.isSubscribing}
         allSites={data.allSites}
+        currentAudit={data.currentAudit}
       />
 
       <main className="flex-1 flex flex-col min-h-screen overflow-y-auto">
@@ -169,6 +188,8 @@ export default function DashboardPage() {
                 CMS Disconnected
               </span>
             )}
+
+            <NotificationBell selectTab={data.selectTab} />
           </div>
         </header>
 
@@ -190,13 +211,25 @@ export default function DashboardPage() {
           )}
 
           {data.activeTab === "overview" && (
-            <OverviewTab
-              currentSite={data.currentSite}
-              currentAudit={data.currentAudit}
-              selectTab={data.selectTab}
-              pastAudits={data.pastAudits}
-              activityLog={data.activityLog}
-            />
+            <div className="space-y-6 animate-slide-up">
+              {!data.currentUser?.onboardingCompletedAt && (
+                <OnboardingChecklist
+                  currentUser={data.currentUser}
+                  allSites={data.allSites}
+                  currentSite={data.currentSite}
+                  currentAudit={data.currentAudit}
+                  selectTab={data.selectTab}
+                  onDismiss={handleDismissOnboarding}
+                />
+              )}
+              <OverviewTab
+                currentSite={data.currentSite}
+                currentAudit={data.currentAudit}
+                selectTab={data.selectTab}
+                pastAudits={data.pastAudits}
+                activityLog={data.activityLog}
+              />
+            </div>
           )}
 
           {data.activeTab === "crawler" && (
@@ -224,6 +257,7 @@ export default function DashboardPage() {
               handleCopyText={data.handleCopyText}
               copiedId={data.copiedId}
               currentSite={data.currentSite}
+              selectTab={data.selectTab}
             />
           )}
 
@@ -235,6 +269,7 @@ export default function DashboardPage() {
               setPreviewBlogPost={data.setPreviewBlogPost}
               handleCopyText={data.handleCopyText}
               copiedId={data.copiedId}
+              selectTab={data.selectTab}
             />
           )}
 
@@ -275,6 +310,7 @@ export default function DashboardPage() {
               currentSite={data.currentSite}
               currentAudit={data.currentAudit}
               fetchInitialData={data.fetchInitialData}
+              selectTab={data.selectTab}
             />
           )}
 

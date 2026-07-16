@@ -1,3 +1,6 @@
+import { isSafeUrlToFetch } from "./urlSafety";
+import { sanitizeHtml } from "./sanitizer";
+
 export interface WordPressConfig {
   wpUrl: string;
   username: string;
@@ -21,6 +24,10 @@ export function normalizeWpUrl(url: string): string {
  */
 async function resolveWpRedirectUrl(wpUrl: string): Promise<string> {
   const normalized = normalizeWpUrl(wpUrl);
+  if (!(await isSafeUrlToFetch(normalized))) {
+    throw new Error("SSRF Verification Failed: Initial target URL is unsafe.");
+  }
+  let resolved = normalized;
   try {
     const probe = await fetch(normalized, {
       method: "HEAD",
@@ -32,12 +39,16 @@ async function resolveWpRedirectUrl(wpUrl: string): Promise<string> {
     });
     if (probe.url) {
       console.log(`[WordPress Connection] Resolved pre-probe redirect: ${normalized} -> ${probe.url}`);
-      return probe.url.replace(/\/+$/, "");
+      resolved = probe.url.replace(/\/+$/, "");
     }
   } catch (e) {
     console.error("[WordPress Connection] Pre-probe redirect resolution failed:", e);
   }
-  return normalized;
+
+  if (!(await isSafeUrlToFetch(resolved))) {
+    throw new Error("SSRF Verification Failed: Resolved redirected URL is unsafe.");
+  }
+  return resolved;
 }
 
 /**
@@ -103,9 +114,10 @@ export async function publishWpPost(
   const credentials = Buffer.from(`${cleanUsername}:${cleanAppPassword}`).toString("base64");
 
   try {
+    const sanitizedContent = sanitizeHtml(content);
     const payload = {
       title,
-      content,
+      content: sanitizedContent,
       status: "draft", // V1 requires review, so we publish as draft
       slug: slug || undefined,
     };

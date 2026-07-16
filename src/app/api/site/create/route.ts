@@ -3,12 +3,24 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
   try {
     const currentUser = await getCurrentUser(req);
     if (!currentUser) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const isAdmin = currentUser.isAdmin || (currentUser.email && currentUser.email.toLowerCase() === "vineetkpe@gmail.com");
+    if (!isAdmin) {
+      const allowed = await checkRateLimit(currentUser.id, "site_create", 5, 60);
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "Too many site creation requests. Limit is 5 per hour." },
+          { status: 429 }
+        );
+      }
     }
 
     const limits = getEffectivePlanLimits(currentUser);

@@ -126,8 +126,29 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
       </div>
 
       {totalAudits === 0 ? (
-        <Card variant="flat" className="p-16 text-center text-zinc-550">
-          <p className="text-sm italic">Run your first crawler audit diagnostics to unlock performance analytics.</p>
+        <Card variant="flat" className="p-16 text-center space-y-6 max-w-2xl mx-auto border-2 border-dashed border-zinc-300 bg-zinc-50/20 rounded-2xl">
+          <div className="mx-auto w-14 h-14 rounded-full bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
+            <BarChart2 className="w-7 h-7" />
+          </div>
+          
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-zinc-900 font-mono uppercase tracking-wider">
+              No Audit Data Available
+            </h3>
+            <p className="text-xs text-zinc-550 leading-relaxed font-mono max-w-md mx-auto">
+              You haven't run any crawl diagnostics yet. Run your first website audit scan to unlock performance tracking and SEO visibility indexing.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => selectTab("crawler")}
+              type="button"
+              className="px-5 py-2.5 border-2 border-zinc-950 bg-violet-650 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-650/90 cursor-pointer"
+            >
+              Run your first audit
+            </button>
+          </div>
         </Card>
       ) : (
         <div className="space-y-8">
