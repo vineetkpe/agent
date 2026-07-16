@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
+import { clearCachedConfig } from "@/lib/aiProvider";
 
 export async function GET(req: Request) {
   try {
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
         aiProviderSource,
         auditCooldownMinutes,
         auditCooldownMinutesSource,
+        envAiProvider: envProvider,
+        envAuditCooldownMinutes: parseInt(envCooldown, 10),
         rawDbSettings: settings || null,
       },
     });
@@ -69,6 +72,9 @@ export async function PATCH(req: Request) {
           : null,
       },
     });
+
+    // Clear server cache so setting takes effect instantly
+    clearCachedConfig();
 
     return NextResponse.json({ success: true, settings });
   } catch (error: any) {

@@ -41,17 +41,22 @@ model Site {
 }
 
 model Audit {
-  id               String      @id @default(uuid())
-  siteId           String
-  site             Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  scorePerformance Int         @default(0)
-  scoreSeo         Int         @default(0)
-  lcpSeconds       Float?
-  clsScore         Float?
-  inpMilliseconds  Float?
-  status           String      @default("pending") // pending, completed, failed
-  createdAt        DateTime    @default(now())
-  items            AuditItem[]
+  id                  String      @id @default(uuid())
+  siteId              String
+  site                Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  scorePerformance    Int         @default(0)
+  scoreSeo            Int         @default(0)
+  scoreSeoGoogle      Int?
+  scoreAccessibility  Int?
+  scoreBestPractices  Int?
+  lcpSeconds          Float?
+  clsScore            Float?
+  inpMilliseconds     Float?
+  status              String      @default("pending") // pending, completed, failed
+  aiScanError         String?
+  pageSpeedScanError  String?
+  createdAt           DateTime    @default(now())
+  items               AuditItem[]
 }
 
 model AuditItem {

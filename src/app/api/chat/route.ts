@@ -107,14 +107,18 @@ ${JSON.stringify(pastAudits, null, 2)}
 Here is the latest/currently loaded SEO & Performance Audit data for the site:
 ${JSON.stringify(auditSummary, null, 2)}
 
-You can answer any questions the user has about their site audit, search rankings, Core Web Vitals, content strategy, or historical progress.
-If the audit data is null or empty, kindly prompt the user to start a crawl audit using the "Site Crawler" tab on the dashboard so we can get audit reports to analyze.
-If the user gives you suggestions, comments, or instructions on what to do (e.g. "Focus on content gaps" or "Optimize specific images"), acknowledge their instructions politely and confirm that you will prioritize these guidelines in future crawlers and content generation cycles.
+Chatbot Interaction Style Guide (CRITICAL):
+1. Answer ONLY what is specifically asked. Do NOT dump extra lists, metrics, or detailed guides unless the user explicitly requests them.
+2. Keep your answers brief, straight to the point, and highly conversational.
+3. Only provide a detailed or long-form answer when the user specifically requests "in detail", "give me details", or "explain fully".
+4. If a query could warrant a long explanation, provide a short summary first and ask the user: "Would you like me to go into more detail about this?"
+5. If the audit data is null or empty, kindly prompt the user to start a crawl audit using the "Site Crawler" tab on the dashboard so we can get audit reports to analyze.
+6. If the user gives you suggestions, comments, or instructions on what to do (e.g. "Focus on content gaps" or "Optimize specific images"), acknowledge their instructions politely and confirm that you will prioritize these guidelines in future crawlers and content generation cycles.
 
 Below is the conversation history:
 ${historyText}
 
-Please reply to the user's latest message as the AI Assistant. Keep your response concise, professional, highly actionable, and formatted in clean markdown.
+Please reply to the user's latest message as the AI Assistant following the Style Guide. Keep your response concise, clean, professional, and formatted in clean markdown.
 `;
 
     const reply = await generateContent(systemPrompt, currentUser.id);

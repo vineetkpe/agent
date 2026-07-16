@@ -131,6 +131,59 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
         </Card>
       ) : (
         <div className="space-y-8">
+          {/* Google PageSpeed Insights Real Metrics section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-2">
+              <h3 className="text-xs font-bold font-mono text-zinc-500 uppercase tracking-wider">
+                Google PageSpeed Insights Audits
+              </h3>
+              <span className="text-[9px] uppercase font-bold font-mono text-zinc-400">
+                Live Google Lighthouse Evaluation
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card variant="flat" className="p-5 flex flex-col justify-between border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+                  Performance
+                </span>
+                <span className="text-3xl font-extrabold text-emerald-600 mt-2 font-mono">
+                  {current?.scorePerformance !== null && current?.scorePerformance !== undefined ? `${current.scorePerformance}/100` : "Not available"}
+                </span>
+              </Card>
+
+              <Card variant="flat" className="p-5 flex flex-col justify-between border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+                  SEO (Google)
+                </span>
+                <span className="text-3xl font-extrabold text-violet-650 mt-2 font-mono">
+                  {current?.scoreSeoGoogle !== null && current?.scoreSeoGoogle !== undefined ? `${current.scoreSeoGoogle}/100` : "Not available"}
+                </span>
+              </Card>
+
+              <Card variant="flat" className="p-5 flex flex-col justify-between border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+                  Accessibility
+                </span>
+                <span className="text-3xl font-extrabold text-amber-600 mt-2 font-mono">
+                  {current?.scoreAccessibility !== null && current?.scoreAccessibility !== undefined ? `${current.scoreAccessibility}/100` : "Not available"}
+                </span>
+              </Card>
+
+              <Card variant="flat" className="p-5 flex flex-col justify-between border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+                  Best Practices
+                </span>
+                <span className="text-3xl font-extrabold text-indigo-600 mt-2 font-mono">
+                  {current?.scoreBestPractices !== null && current?.scoreBestPractices !== undefined ? `${current.scoreBestPractices}/100` : "Not available"}
+                </span>
+              </Card>
+            </div>
+            <p className="text-[9px] text-zinc-400 font-mono italic mt-1 text-right">
+              Powered by Google PageSpeed Insights
+            </p>
+          </div>
+
           {/* Top Level Comparison Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card variant="shadow" className="p-5 flex flex-col justify-between">

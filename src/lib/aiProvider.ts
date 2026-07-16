@@ -12,6 +12,10 @@ interface CachedConfig {
 let cachedConfig: CachedConfig | null = null;
 const CACHE_TTL_MS = 30 * 1000;
 
+export function clearCachedConfig() {
+  cachedConfig = null;
+}
+
 export async function getActiveProviderConfig(): Promise<{ provider: string; isMock: boolean }> {
   const now = Date.now();
   if (cachedConfig && (now - cachedConfig.resolvedAt) < CACHE_TTL_MS) {

@@ -175,6 +175,10 @@ export default function DashboardPage() {
               currentAudit={data.currentAudit}
               currentSite={data.currentSite}
               selectTab={data.selectTab}
+              aiScanStatus={data.aiScanStatus}
+              pageSpeedScanStatus={data.pageSpeedScanStatus}
+              aiScanError={data.aiScanError}
+              pageSpeedScanError={data.pageSpeedScanError}
             />
           )}
 

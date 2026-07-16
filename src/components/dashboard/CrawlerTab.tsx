@@ -12,6 +12,10 @@ interface CrawlerTabProps {
   currentAudit: any;
   currentSite: any;
   selectTab: (tab: any) => void;
+  aiScanStatus?: "pending" | "running" | "done" | "failed";
+  pageSpeedScanStatus?: "pending" | "running" | "done" | "failed";
+  aiScanError?: string | null;
+  pageSpeedScanError?: string | null;
 }
 
 export const CrawlerTab: React.FC<CrawlerTabProps> = ({
@@ -24,6 +28,10 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
   currentAudit,
   currentSite,
   selectTab,
+  aiScanStatus = "pending",
+  pageSpeedScanStatus = "pending",
+  aiScanError = null,
+  pageSpeedScanError = null,
 }) => {
   const metaFixes =
     currentAudit?.items?.filter((item: any) =>
@@ -68,17 +76,94 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
           </button>
         </form>
 
-        {/* Progress Animation */}
-        {isCrawling && (
-          <div className="mt-6 p-4 rounded-xl border flex flex-col gap-3 animate-fade-in border-violet-100 bg-violet-50/50">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1.5">
-              <span className="text-violet-600 font-semibold flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5 animate-spin" /> Autonomous growth agent crawling pages...
+        {/* Progress Animation Tracker */}
+        {(isCrawling || (currentAudit && (currentAudit.aiScanError || currentAudit.pageSpeedScanError))) && (
+          <div className="mt-6 p-5 rounded-2xl border-2 border-zinc-950 bg-white shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] space-y-4 font-mono text-xs animate-fade-in">
+            <div className="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-3">
+              <span className="font-bold uppercase tracking-wider text-zinc-900 text-[10px]">
+                Diagnostics Progress Tracker
               </span>
-              <span className="text-zinc-500 font-mono">{crawlStep}</span>
+              {isCrawling && (
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider truncate max-w-[200px]" title={crawlStep}>
+                  {crawlStep}
+                </span>
+              )}
             </div>
-            <div className="w-full h-2 rounded-full overflow-hidden bg-zinc-200">
-              <div className="bg-gradient-to-r from-violet-600 to-indigo-500 h-full rounded-full w-[75%] transition-all duration-1000" />
+
+            {/* Row 1: AI Content & Fix Analysis */}
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 border-2 border-zinc-950 bg-zinc-50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-lg border-2 border-zinc-950 bg-violet-100 flex items-center justify-center font-bold text-violet-750">
+                    1
+                  </div>
+                  <span className="font-bold text-zinc-800">AI Content & Fix Analysis</span>
+                </div>
+                <div className="flex items-center gap-2 font-bold uppercase text-[10px]">
+                  {((isCrawling ? aiScanStatus : (currentAudit?.aiScanError ? "failed" : "done")) === "pending") && (
+                    <span className="text-zinc-400">Pending</span>
+                  )}
+                  {((isCrawling ? aiScanStatus : (currentAudit?.aiScanError ? "failed" : "done")) === "running") && (
+                    <span className="text-violet-600 animate-pulse flex items-center gap-1">
+                      <Activity className="w-3.5 h-3.5 animate-spin" /> Running
+                    </span>
+                  )}
+                  {((isCrawling ? aiScanStatus : (currentAudit?.aiScanError ? "failed" : "done")) === "done") && (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 font-bold" /> Complete
+                    </span>
+                  )}
+                  {((isCrawling ? aiScanStatus : (currentAudit?.aiScanError ? "failed" : "done")) === "failed") && (
+                    <span className="text-rose-600 flex items-center gap-1">
+                      Failed
+                    </span>
+                  )}
+                </div>
+              </div>
+              {((isCrawling ? aiScanError : currentAudit?.aiScanError)) && (
+                <p className="text-[10px] text-rose-650 bg-rose-50 border border-rose-200 p-2.5 rounded-lg">
+                  Error details: {isCrawling ? aiScanError : currentAudit?.aiScanError}
+                </p>
+              )}
+            </div>
+
+            {/* Row 2: Google PageSpeed Scan */}
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 border-2 border-zinc-950 bg-zinc-50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-lg border-2 border-zinc-950 bg-amber-100 flex items-center justify-center font-bold text-amber-750">
+                    2
+                  </div>
+                  <span className="font-bold text-zinc-800">
+                    Google PageSpeed Scan (Performance, SEO, Accessibility, Best Practices)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 font-bold uppercase text-[10px]">
+                  {((isCrawling ? pageSpeedScanStatus : (currentAudit?.pageSpeedScanError ? "failed" : "done")) === "pending") && (
+                    <span className="text-zinc-400">Pending</span>
+                  )}
+                  {((isCrawling ? pageSpeedScanStatus : (currentAudit?.pageSpeedScanError ? "failed" : "done")) === "running") && (
+                    <span className="text-amber-600 animate-pulse flex items-center gap-1">
+                      <Activity className="w-3.5 h-3.5 animate-spin" /> Running
+                    </span>
+                  )}
+                  {((isCrawling ? pageSpeedScanStatus : (currentAudit?.pageSpeedScanError ? "failed" : "done")) === "done") && (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 font-bold" /> Complete
+                    </span>
+                  )}
+                  {((isCrawling ? pageSpeedScanStatus : (currentAudit?.pageSpeedScanError ? "failed" : "done")) === "failed") && (
+                    <span className="text-rose-600 flex items-center gap-1">
+                      Failed
+                    </span>
+                  )}
+                </div>
+              </div>
+              {((isCrawling ? pageSpeedScanError : currentAudit?.pageSpeedScanError)) && (
+                <p className="text-[10px] text-rose-650 bg-rose-50 border border-rose-200 p-2.5 rounded-lg">
+                  Error details: {isCrawling ? pageSpeedScanError : currentAudit?.pageSpeedScanError}
+                </p>
+              )}
             </div>
           </div>
         )}

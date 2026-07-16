@@ -140,9 +140,14 @@ export async function GET(req: Request) {
         id: true,
         scorePerformance: true,
         scoreSeo: true,
+        scoreSeoGoogle: true,
+        scoreAccessibility: true,
+        scoreBestPractices: true,
         lcpSeconds: true,
         clsScore: true,
         inpMilliseconds: true,
+        aiScanError: true,
+        pageSpeedScanError: true,
         createdAt: true,
         status: true,
       },
@@ -369,18 +374,20 @@ export async function POST(req: Request) {
     const audit = await prisma.audit.create({
       data: {
         siteId: site.id,
-        scorePerformance: auditResults.scorePerformance,
+        scorePerformance: 0,
         scoreSeo: auditResults.scoreSeo,
-        lcpSeconds: auditResults.lcpSeconds,
-        clsScore: auditResults.clsScore,
-        inpMilliseconds: auditResults.inpMilliseconds,
         status: "pending",
       },
     });
 
-    // 6. Generate improvements using Gemini AI
-    const parsedProfile = businessProfileData ? JSON.parse(businessProfileData) : null;
-    const profileText = parsedProfile ? `
+    // 6. Generate improvements using Gemini AI (AI Scan Step)
+    let aiResponse: any = null;
+    let aiScanError: string | null = null;
+
+    try {
+      console.log(`[Audit] Running AI content/fixes scan for: ${cleanUrl}`);
+      const parsedProfile = businessProfileData ? JSON.parse(businessProfileData) : null;
+      const profileText = parsedProfile ? `
 Here is the Discovered Business Intelligence Profile for this company:
 - Industry: ${parsedProfile.industry}
 - Category: ${parsedProfile.category}
@@ -393,7 +400,7 @@ Here is the Discovered Business Intelligence Profile for this company:
 - Competitors: ${parsedProfile.competitors?.join(", ") || "None listed"}
 ` : "No explicit business profile discovered yet.";
 
-    const systemPrompt = `
+      const systemPrompt = `
 You are an expert AI Website Growth Agent specializing in Local Business SEO and Content Marketing.
 We have audited the website: ${cleanUrl}.
 
@@ -453,137 +460,148 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 }
 `;
 
-    const aiResponse = await generateStructuredJson<{
-      keywordOpportunities: { keyword: string; rationale: string; intent: string }[];
-      fixes: { targetUrl: string; type: string; suggestedValue: string }[];
-      blogPosts: { title: string; content: string; suggestedSlug: string; targetKeyword: string }[];
-    }>(systemPrompt, geminiResponseSchema, currentUser.id);
+      aiResponse = await generateStructuredJson<{
+        keywordOpportunities: { keyword: string; rationale: string; intent: string }[];
+        fixes: { targetUrl: string; type: string; suggestedValue: string }[];
+        blogPosts: { title: string; content: string; suggestedSlug: string; targetKeyword: string }[];
+      }>(systemPrompt, geminiResponseSchema, currentUser.id);
 
-    // 7. Save pending items to the database
-    const savedItems = [];
+      // Save Page/Meta/Alt/Link Fixes
+      if (aiResponse.fixes && aiResponse.fixes.length > 0) {
+        for (const fix of aiResponse.fixes) {
+          const relatedIssue = auditResults.issues.find(
+            (issue) => issue.targetUrl === fix.targetUrl && issue.type === fix.type
+          );
+          const currentValue = relatedIssue ? JSON.stringify(relatedIssue.currentValue) : "";
 
-    // Save Page/Meta/Alt/Link Fixes
-    if (aiResponse.fixes && aiResponse.fixes.length > 0) {
-      for (const fix of aiResponse.fixes) {
-        // Find corresponding issue current value
-        const relatedIssue = auditResults.issues.find(
-          (issue) => issue.targetUrl === fix.targetUrl && issue.type === fix.type
-        );
-        const currentValue = relatedIssue ? JSON.stringify(relatedIssue.currentValue) : "";
+          await prisma.auditItem.create({
+            data: {
+              auditId: audit.id,
+              siteId: site.id,
+              type: fix.type,
+              targetUrl: fix.targetUrl,
+              currentValue: currentValue,
+              suggestedValue: fix.suggestedValue,
+              status: "pending",
+            },
+          });
+        }
+      }
 
-        const item = await prisma.auditItem.create({
+      // Save Blog Post suggestions
+      if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
+        for (const post of aiResponse.blogPosts) {
+          await prisma.auditItem.create({
+            data: {
+              auditId: audit.id,
+              siteId: site.id,
+              type: "blog_post",
+              targetUrl: `${cleanUrl}/blog/${post.suggestedSlug}`,
+              currentValue: JSON.stringify({ status: "not_created" }),
+              suggestedValue: JSON.stringify({
+                title: post.title,
+                content: post.content,
+                slug: post.suggestedSlug,
+                targetKeyword: post.targetKeyword,
+              }),
+              status: "pending",
+            },
+          });
+        }
+      }
+
+      // Save Keyword Opportunities
+      if (aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
+        for (const opp of aiResponse.keywordOpportunities) {
+          await prisma.auditItem.create({
+            data: {
+              auditId: audit.id,
+              siteId: site.id,
+              type: "keyword_opportunity",
+              targetUrl: cleanUrl,
+              currentValue: "",
+              suggestedValue: JSON.stringify({
+                keyword: opp.keyword,
+                rationale: opp.rationale,
+                intent: opp.intent,
+              }),
+              status: "pending",
+            },
+          });
+        }
+      }
+    } catch (aiError: any) {
+      console.error("[Audit] AI step failed:", aiError);
+      aiScanError = aiError?.message || "AI scan step failed.";
+    }
+
+    // Save mechanical/informational issues directly
+    try {
+      const directIssues = auditResults.issues.filter(issue =>
+        ["insecure_link", "image_weight", "robots_sitemap"].includes(issue.type)
+      );
+      for (const issue of directIssues) {
+        if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml") {
+          continue;
+        }
+        
+        let suggestedText = issue.suggestedValue?.action || issue.suggestedValue;
+        if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/robots.txt") {
+          suggestedText = `Create a robots.txt file at ${cleanUrl}/robots.txt with: \n\nUser-agent: *\nAllow: /\n\nSitemap: ${cleanUrl}/sitemap.xml`;
+        }
+
+        await prisma.auditItem.create({
           data: {
             auditId: audit.id,
             siteId: site.id,
-            type: fix.type,
-            targetUrl: fix.targetUrl,
-            currentValue: currentValue,
-            suggestedValue: fix.suggestedValue,
+            type: issue.type,
+            targetUrl: issue.targetUrl,
+            currentValue: JSON.stringify(issue.currentValue),
+            suggestedValue: suggestedText,
             status: "pending",
           },
         });
-        savedItems.push(item);
       }
-    }
 
-    // Save Blog Post suggestions
-    if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
-      for (const post of aiResponse.blogPosts) {
-        const item = await prisma.auditItem.create({
+      const hasSitemapIssue = auditResults.issues.some(
+        (issue) => issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml"
+      );
+      if (hasSitemapIssue) {
+        const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
+        const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
+        
+        await prisma.auditItem.create({
           data: {
             auditId: audit.id,
             siteId: site.id,
-            type: "blog_post",
-            targetUrl: `${cleanUrl}/blog/${post.suggestedSlug}`,
-            currentValue: JSON.stringify({ status: "not_created" }),
-            suggestedValue: JSON.stringify({
-              title: post.title,
-              content: post.content,
-              slug: post.suggestedSlug,
-              targetKeyword: post.targetKeyword,
-            }),
-            status: "pending",
-          },
-        });
-        savedItems.push(item);
-      }
-    }
-
-    // Save Keyword Opportunities
-    if (aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
-      for (const opp of aiResponse.keywordOpportunities) {
-        const item = await prisma.auditItem.create({
-          data: {
-            auditId: audit.id,
-            siteId: site.id,
-            type: "keyword_opportunity",
+            type: "robots_sitemap",
             targetUrl: cleanUrl,
-            currentValue: "",
-            suggestedValue: JSON.stringify({
-              keyword: opp.keyword,
-              rationale: opp.rationale,
-              intent: opp.intent,
-            }),
+            currentValue: JSON.stringify({ path: "/sitemap.xml", missing: true }),
+            suggestedValue: sitemapXml,
             status: "pending",
           },
         });
-        savedItems.push(item);
       }
+    } catch (saveErr) {
+      console.error("[Audit] Direct issues save failed:", saveErr);
     }
 
-    // Save mechanical/informational issues directly (insecure_link, image_weight, robots_sitemap for robots.txt)
-    const directIssues = auditResults.issues.filter(issue =>
-      ["insecure_link", "image_weight", "robots_sitemap"].includes(issue.type)
-    );
-    for (const issue of directIssues) {
-      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml") {
-        continue;
-      }
-      
-      let suggestedText = issue.suggestedValue?.action || issue.suggestedValue;
-      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/robots.txt") {
-        suggestedText = `Create a robots.txt file at ${cleanUrl}/robots.txt with: \n\nUser-agent: *\nAllow: /\n\nSitemap: ${cleanUrl}/sitemap.xml`;
-      }
+    // Google PageSpeed Insights Step
+    let psData: any = null;
+    let pageSpeedScanError: string | null = null;
 
-      const item = await prisma.auditItem.create({
-        data: {
-          auditId: audit.id,
-          siteId: site.id,
-          type: issue.type,
-          targetUrl: issue.targetUrl,
-          currentValue: JSON.stringify(issue.currentValue),
-          suggestedValue: suggestedText,
-          status: "pending",
-        },
-      });
-      savedItems.push(item);
+    try {
+      console.log(`[Audit] Running PageSpeed Insights scan for: ${cleanUrl}`);
+      const { getPageSpeedData } = await import("@/lib/seoChecks");
+      psData = await getPageSpeedData(cleanUrl);
+    } catch (psiError: any) {
+      console.error("[Audit] PageSpeed step failed:", psiError);
+      pageSpeedScanError = psiError?.message || "Google PageSpeed Insights scan step failed.";
     }
 
-    // Auto-generate sitemap.xml
-    const hasSitemapIssue = auditResults.issues.some(
-      (issue) => issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml"
-    );
-    if (hasSitemapIssue) {
-      const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
-      const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
-      
-      const item = await prisma.auditItem.create({
-        data: {
-          auditId: audit.id,
-          siteId: site.id,
-          type: "robots_sitemap",
-          targetUrl: cleanUrl,
-          currentValue: JSON.stringify({ path: "/sitemap.xml", missing: true }),
-          suggestedValue: sitemapXml,
-          status: "pending",
-        },
-      });
-      savedItems.push(item);
-    }
-
-    // AI-generated internal linking suggestions
-    if (crawledPages.length > 2) {
-      console.log(`[Audit Route] Generating AI internal linking suggestions...`);
+    // Generate internal linking suggestions if AI succeeded
+    if (!aiScanError && crawledPages.length > 2) {
+      console.log(`[Audit] Generating AI internal linking suggestions...`);
       const pagesSummary = crawledPages.map(p => ({
         url: p.url,
         title: p.title,
@@ -631,7 +649,7 @@ Provide suggestions as a JSON object matching this schema:
 
         if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
           for (const sug of linkingResponse.suggestions) {
-            const item = await prisma.auditItem.create({
+            await prisma.auditItem.create({
               data: {
                 auditId: audit.id,
                 siteId: site.id,
@@ -646,7 +664,6 @@ Provide suggestions as a JSON object matching this schema:
                 status: "pending",
               },
             });
-            savedItems.push(item);
           }
         }
       } catch (linkErr) {
@@ -654,14 +671,27 @@ Provide suggestions as a JSON object matching this schema:
       }
     }
 
-    // 8. Update Audit record to completed
+    // 8. Update Audit record to completed/failed state
     const completedAudit = await prisma.audit.update({
       where: { id: audit.id },
-      data: { status: "completed" },
-      include: { items: true },
+      data: {
+        scorePerformance: psData?.scorePerformance ?? 0,
+        scoreSeoGoogle: psData?.scoreSeoGoogle ?? null,
+        scoreAccessibility: psData?.scoreAccessibility ?? null,
+        scoreBestPractices: psData?.scoreBestPractices ?? null,
+        lcpSeconds: psData?.lcpSeconds ?? null,
+        clsScore: psData?.clsScore ?? null,
+        inpMilliseconds: psData?.inpMilliseconds ?? null,
+        aiScanError,
+        pageSpeedScanError,
+        status: (aiScanError && pageSpeedScanError) ? "failed" : "completed",
+      },
+      include: {
+        items: true,
+      },
     });
 
-    // 9. Send notification email (logged for MVP/V1)
+    // 9. Send notification email
     console.log(`[Email Notification] Sending ready alert: Hello! Your audit for ${cleanUrl} is ready. View fixes here: http://localhost:3000/dashboard`);
 
     return NextResponse.json({
@@ -671,9 +701,14 @@ Provide suggestions as a JSON object matching this schema:
         siteId: completedAudit.siteId,
         scorePerformance: completedAudit.scorePerformance,
         scoreSeo: completedAudit.scoreSeo,
+        scoreSeoGoogle: completedAudit.scoreSeoGoogle,
+        scoreAccessibility: completedAudit.scoreAccessibility,
+        scoreBestPractices: completedAudit.scoreBestPractices,
         lcpSeconds: completedAudit.lcpSeconds,
         clsScore: completedAudit.clsScore,
         inpMilliseconds: completedAudit.inpMilliseconds,
+        aiScanError: completedAudit.aiScanError,
+        pageSpeedScanError: completedAudit.pageSpeedScanError,
         status: completedAudit.status,
         createdAt: completedAudit.createdAt,
         items: completedAudit.items,

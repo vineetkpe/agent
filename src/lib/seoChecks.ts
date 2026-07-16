@@ -3,11 +3,7 @@ import { isSafeUrlToFetch } from "./urlSafety";
 import * as cheerio from "cheerio";
 
 export interface AuditResults {
-  scorePerformance: number;
   scoreSeo: number;
-  lcpSeconds: number | null;
-  clsScore: number | null;
-  inpMilliseconds: number | null;
   issues: {
     type: "meta_title" | "meta_description" | "broken_link" | "missing_alt" | "schema_markup" | "heading_structure" | "canonical_tag" | "social_meta" | "insecure_link" | "duplicate_content" | "robots_sitemap" | "image_weight";
     targetUrl: string;
@@ -58,52 +54,95 @@ async function checkLink(url: string): Promise<{ url: string; isBroken: boolean;
   }
 }
 
-// Fetch PageSpeed performance score and Core Web Vitals
-async function getPageSpeedData(url: string): Promise<{
-  score: number;
+export interface PageSpeedDataResult {
+  scorePerformance: number | null;
+  scoreSeoGoogle: number | null;
+  scoreAccessibility: number | null;
+  scoreBestPractices: number | null;
   lcpSeconds: number | null;
   clsScore: number | null;
   inpMilliseconds: number | null;
-}> {
-  // SSRF Check for PageSpeed URL targets (must be safe)
+  isMock?: boolean;
+}
+
+// Fetch Google PageSpeed Insights scores across all 4 categories
+export async function getPageSpeedData(url: string): Promise<PageSpeedDataResult> {
+  // SSRF Check
   if (!(await isSafeUrlToFetch(url))) {
-    console.log(`[PageSpeed] Skipping PageSpeed check for unsafe URL: ${url}`);
-    return { score: 50, lcpSeconds: 3.2, clsScore: 0.15, inpMilliseconds: 250 };
+    throw new Error(`SSRF validation failed: Unsafe target URL provided: ${url}`);
   }
 
   const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY;
-  if (!apiKey || apiKey === "mock-gemini-key" || apiKey === "mock-pagespeed-key") {
+  if (!apiKey || apiKey === "mock-gemini-key" || apiKey === "mock-pagespeed-key" || apiKey === "mock-key") {
     console.log("[PageSpeed] Using mock PageSpeed scores.");
-    // Generate semi-realistic mock scores consistent with existing range
-    const score = Math.floor(Math.random() * (85 - 65 + 1)) + 65;
+    const scorePerformance = Math.floor(Math.random() * (85 - 65 + 1)) + 65;
+    const scoreSeoGoogle = Math.floor(Math.random() * (95 - 80 + 1)) + 80;
+    const scoreAccessibility = Math.floor(Math.random() * (90 - 75 + 1)) + 75;
+    const scoreBestPractices = Math.floor(Math.random() * (88 - 70 + 1)) + 70;
     const lcpSeconds = parseFloat((Math.random() * (4.2 - 1.2) + 1.2).toFixed(2));
     const clsScore = parseFloat((Math.random() * (0.25 - 0.01) + 0.01).toFixed(3));
     const inpMilliseconds = Math.floor(Math.random() * (450 - 80) + 80);
-    return { score, lcpSeconds, clsScore, inpMilliseconds };
+    return {
+      scorePerformance,
+      scoreSeoGoogle,
+      scoreAccessibility,
+      scoreBestPractices,
+      lcpSeconds,
+      clsScore,
+      inpMilliseconds,
+      isMock: true,
+    };
   }
 
-  try {
-    const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&category=performance&key=${apiKey}`;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
-    const data = await res.json();
-    const scoreVal = data?.lighthouseResult?.categories?.performance?.score;
-    const score = typeof scoreVal === "number" ? Math.round(scoreVal * 100) : 75;
+  const categories = ["performance", "seo", "accessibility", "best-practices"];
+  const categoryParams = categories.map(cat => `category=${cat}`).join("&");
+  const apiUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&${categoryParams}&key=${apiKey}`;
 
-    const lcpVal = data?.lighthouseResult?.audits?.["largest-contentful-paint"]?.numericValue;
-    const lcpSeconds = typeof lcpVal === "number" ? parseFloat((lcpVal / 1000).toFixed(2)) : null;
-
-    const clsVal = data?.lighthouseResult?.audits?.["cumulative-layout-shift"]?.numericValue;
-    const clsScore = typeof clsVal === "number" ? parseFloat(clsVal.toFixed(3)) : null;
-
-    const inpVal = data?.lighthouseResult?.audits?.["interaction-to-next-paint"]?.numericValue ??
-                   data?.lighthouseResult?.audits?.["total-blocking-time"]?.numericValue;
-    const inpMilliseconds = typeof inpVal === "number" ? Math.round(inpVal) : null;
-
-    return { score, lcpSeconds, clsScore, inpMilliseconds };
-  } catch (err) {
-    console.error("[PageSpeed] API fetch failed, using fallback:", err);
-    return { score: 72, lcpSeconds: 2.8, clsScore: 0.12, inpMilliseconds: 180 };
+  const res = await fetch(apiUrl, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Google PageSpeed Insights API failed with status ${res.status}: ${errorText}`);
   }
+
+  const data = await res.json();
+  if (data?.error) {
+    throw new Error(`Google PageSpeed Insights API error: ${data.error.message || JSON.stringify(data.error)}`);
+  }
+
+  const lighthouse = data?.lighthouseResult;
+  if (!lighthouse) {
+    throw new Error("Invalid response structure from Google PageSpeed Insights API (missing lighthouseResult).");
+  }
+
+  const perfScoreVal = lighthouse?.categories?.performance?.score;
+  const seoScoreVal = lighthouse?.categories?.seo?.score;
+  const accScoreVal = lighthouse?.categories?.accessibility?.score;
+  const bpScoreVal = lighthouse?.categories?.["best-practices"]?.score;
+
+  const scorePerformance = typeof perfScoreVal === "number" ? Math.round(perfScoreVal * 100) : null;
+  const scoreSeoGoogle = typeof seoScoreVal === "number" ? Math.round(seoScoreVal * 100) : null;
+  const scoreAccessibility = typeof accScoreVal === "number" ? Math.round(accScoreVal * 100) : null;
+  const scoreBestPractices = typeof bpScoreVal === "number" ? Math.round(bpScoreVal * 100) : null;
+
+  const lcpVal = lighthouse?.audits?.["largest-contentful-paint"]?.numericValue;
+  const lcpSeconds = typeof lcpVal === "number" ? parseFloat((lcpVal / 1000).toFixed(2)) : null;
+
+  const clsVal = lighthouse?.audits?.["cumulative-layout-shift"]?.numericValue;
+  const clsScore = typeof clsVal === "number" ? parseFloat(clsVal.toFixed(3)) : null;
+
+  const inpVal = lighthouse?.audits?.["interaction-to-next-paint"]?.numericValue ??
+                 lighthouse?.audits?.["total-blocking-time"]?.numericValue;
+  const inpMilliseconds = typeof inpVal === "number" ? Math.round(inpVal) : null;
+
+  return {
+    scorePerformance,
+    scoreSeoGoogle,
+    scoreAccessibility,
+    scoreBestPractices,
+    lcpSeconds,
+    clsScore,
+    inpMilliseconds,
+  };
 }
 
 // Site-wide Duplicate Content and Sitemap/Robots checks
@@ -508,18 +547,11 @@ export async function runSeoAudits(pages: CrawledPage[], seedUrl: string): Promi
     issues.push(swIssue);
   }
 
-  // 5. Fetch PageSpeed Performance Score and Core Web Vitals
-  const psData = await getPageSpeedData(seedUrl);
-
   // SEO Score calculation (percentage of passed audits)
   const scoreSeo = totalSeoChecks > 0 ? Math.round((passedSeoChecks / totalSeoChecks) * 100) : 100;
 
   return {
-    scorePerformance: psData.score,
     scoreSeo,
-    lcpSeconds: psData.lcpSeconds,
-    clsScore: psData.clsScore,
-    inpMilliseconds: psData.inpMilliseconds,
     issues,
   };
 }

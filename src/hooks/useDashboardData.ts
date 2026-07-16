@@ -16,6 +16,12 @@ export function useDashboardData() {
   const [errorMessage, setErrorMessage] = useState("");
   const [activityLog, setActivityLog] = useState<any[]>([]);
 
+  // Independent scan progress states
+  const [aiScanStatus, setAiScanStatus] = useState<"pending" | "running" | "done" | "failed">("pending");
+  const [pageSpeedScanStatus, setPageSpeedScanStatus] = useState<"pending" | "running" | "done" | "failed">("pending");
+  const [aiScanError, setAiScanError] = useState<string | null>(null);
+  const [pageSpeedScanError, setPageSpeedScanError] = useState<string | null>(null);
+
   const [wpUrl, setWpUrl] = useState("");
   const [wpUsername, setWpUsername] = useState("");
   const [wpAppPassword, setWpAppPassword] = useState("");
@@ -134,6 +140,12 @@ export function useDashboardData() {
     setErrorMessage("");
     setCrawlStep("Initiating deep crawler...");
 
+    // Set initial states
+    setAiScanStatus("running");
+    setPageSpeedScanStatus("pending");
+    setAiScanError(null);
+    setPageSpeedScanError(null);
+
     try {
       const steps = [
         "Resolving domain headers...",
@@ -142,7 +154,6 @@ export function useDashboardData() {
         "Validating meta titles & descriptions...",
         "Analyzing image alternative text tags...",
         "Scanning for broken outbound links...",
-        "Requesting Google PageSpeed score...",
         "Analyzing JSON-LD Schema structures...",
         "Feeding data payload to Gemini AI provider...",
         "Generating optimized SEO fixes...",
@@ -154,6 +165,11 @@ export function useDashboardData() {
         if (stepIdx < steps.length) {
           setCrawlStep(steps[stepIdx]);
           stepIdx++;
+
+          if (stepIdx === 5) {
+            setAiScanStatus("running");
+            setPageSpeedScanStatus("running");
+          }
         }
       }, 900);
 
@@ -173,6 +189,21 @@ export function useDashboardData() {
 
       const data = await res.json();
       if (data.success) {
+        // Resolve states
+        if (data.audit.aiScanError) {
+          setAiScanStatus("failed");
+          setAiScanError(data.audit.aiScanError);
+        } else {
+          setAiScanStatus("done");
+        }
+
+        if (data.audit.pageSpeedScanError) {
+          setPageSpeedScanStatus("failed");
+          setPageSpeedScanError(data.audit.pageSpeedScanError);
+        } else {
+          setPageSpeedScanStatus("done");
+        }
+
         setCurrentAudit(data.audit);
         setSelectedSiteId(data.audit.siteId);
         setSelectedAuditId(data.audit.id);
@@ -181,6 +212,10 @@ export function useDashboardData() {
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred during the audit scan.");
+      setAiScanStatus("failed");
+      setAiScanError(err.message || "Execution timeout or network error.");
+      setPageSpeedScanStatus("failed");
+      setPageSpeedScanError(err.message || "Execution timeout or network error.");
     } finally {
       setIsCrawling(false);
       setCrawlStep("");
@@ -415,6 +450,14 @@ export function useDashboardData() {
     selectedAuditId,
     setSelectedAuditId,
     fetchInitialData,
+    aiScanStatus,
+    setAiScanStatus,
+    pageSpeedScanStatus,
+    setPageSpeedScanStatus,
+    aiScanError,
+    setAiScanError,
+    pageSpeedScanError,
+    setPageSpeedScanError,
     deleteSite,
     toggleGscConnection,
     addSite,
