@@ -6,11 +6,14 @@ import { ScoreTrendChart } from "./charts/ScoreTrendChart";
 import { IssueBreakdownChart } from "./charts/IssueBreakdownChart";
 import { ApprovalFunnelChart } from "./charts/ApprovalFunnelChart";
 
+import { AgentActivityLog } from "./AgentActivityLog";
+
 interface OverviewTabProps {
   currentSite: any;
   currentAudit: any;
   selectTab: (tab: any) => void;
   pastAudits?: any[];
+  activityLog?: any[];
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -18,6 +21,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   currentAudit,
   selectTab,
   pastAudits = [],
+  activityLog = [],
 }) => {
   if (!currentAudit) {
     return (
@@ -198,59 +202,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       {/* Funnel Chart Row */}
       <ApprovalFunnelChart items={items} />
 
-      {/* Recent Activity List */}
-      <Card variant="flat" className="space-y-4">
-        <div>
-          <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-500">
-            Recent Activity
-          </h3>
-          <p className="text-xs text-zinc-400">Last 5 updates for this website</p>
-        </div>
-
-        <div className="space-y-3">
-          {activityItems.length === 0 ? (
-            <p className="text-xs text-zinc-500 italic py-2">No activity recorded yet.</p>
-          ) : (
-            activityItems.map((item: any) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 border rounded-xl bg-zinc-50/50 border-zinc-200"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-zinc-800 font-mono">
-                      {item.type.replace("_", " ").toUpperCase()}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[200px] sm:max-w-md">
-                      {item.targetUrl.includes("example.com") && currentSite?.url
-                        ? item.targetUrl.replace("https://example.com", currentSite.url)
-                        : item.targetUrl}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right flex flex-col items-end justify-center">
-                  {item.status === "applied" && (
-                    <Badge variant="emerald" className="text-[8px] px-1.5 py-0.5">Live</Badge>
-                  )}
-                  {item.status === "approved" && (
-                    <Badge variant="amber" className="text-[8px] px-1.5 py-0.5">Approved</Badge>
-                  )}
-                  {item.status === "rejected" && (
-                    <Badge variant="zinc" className="text-[8px] px-1.5 py-0.5">Rejected</Badge>
-                  )}
-                  {item.status === "pending" && (
-                    <Badge variant="violet" className="text-[8px] px-1.5 py-0.5">Pending</Badge>
-                  )}
-                  <span className="text-[9px] text-zinc-400 font-mono block mt-1">
-                    {new Date(item.appliedAt || item.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Card>
+      {/* Real Agent Activity Log */}
+      <AgentActivityLog activityLog={activityLog} />
     </div>
   );
 };

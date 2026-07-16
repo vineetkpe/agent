@@ -217,7 +217,7 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                     </span>
 
                     {isApplied && <Badge variant="emerald">Live on Site</Badge>}
-                    {isApproved && <Badge variant="amber">Action Required: Copy & Paste</Badge>}
+                    {isApproved && <Badge variant="amber">Approved -- Manual Action Needed</Badge>}
                     {isRejected && <Badge variant="zinc">Rejected</Badge>}
                     {item.status === "pending" && (
                       <Badge variant="amber" className="animate-pulse">Pending Review</Badge>
@@ -369,12 +369,14 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                       </div>
                     </div>
 
-                    {/* WordPress push failure callout */}
+                    {/* WordPress update/push failure callout */}
                     {item.errorMessage && (
                       <div className="p-3.5 rounded-xl border border-red-200 bg-red-50 text-xs text-red-750 flex items-start gap-2.5">
                         <AlertTriangle className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-bold uppercase tracking-wider text-[9px] text-red-800 font-mono">Publishing Failed</p>
+                          <p className="font-bold uppercase tracking-wider text-[9px] text-red-800 font-mono">
+                            {["meta_title", "meta_description"].includes(item.type) ? "Auto-Apply Failed" : "Publishing Failed"}
+                          </p>
                           <p className="mt-0.5 leading-relaxed">{item.errorMessage}</p>
                         </div>
                       </div>
@@ -384,14 +386,14 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                     {item.status === "pending" && (() => {
                       const isWpConnected = !!currentSite?.wpUrl;
                       const isBlogPost = item.type === "blog_post";
-                      const canAutoApply = isBlogPost && isWpConnected;
+                      const isMetaWithWp = ["meta_title", "meta_description"].includes(item.type) && isWpConnected;
 
                       return (
                         <div className="flex gap-2.5 justify-end pt-3 border-t border-zinc-100">
                           <button
                             type="button"
                             onClick={() => handleActionItem(item.id, "reject")}
-                            className="px-4 py-2 border-2 border-zinc-950 bg-white text-zinc-850 font-bold text-sm uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-55"
+                            className="px-4 py-2 border-2 border-zinc-950 bg-white text-zinc-855 font-bold text-sm uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-55"
                           >
                             Reject Fix
                           </button>
@@ -401,9 +403,13 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                             onClick={() => handleActionItem(item.id, "approve")}
                             className="px-4 py-2 border-2 border-zinc-950 bg-violet-600 text-white font-bold text-sm uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-700 flex items-center gap-1.5"
                           >
-                            {canAutoApply ? (
+                            {isBlogPost && isWpConnected ? (
                               <>
                                 <Zap className="w-3.5 h-3.5" /> Publish to WordPress
+                              </>
+                            ) : isMetaWithWp ? (
+                              <>
+                                <Zap className="w-3.5 h-3.5" /> Approve & Attempt Auto-Fix
                               </>
                             ) : (
                               <>
@@ -457,8 +463,8 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                           </button>
                         </div>
                         {isApproved && (
-                          <p className="text-[11px] text-zinc-500 italic px-1 font-mono">
-                            This site isn&apos;t connected to WordPress (or this fix type requires manual placement) &mdash; copy the snippet above and add it to your site.
+                          <p className="text-[11px] text-zinc-500 italic px-1 font-mono font-medium leading-relaxed mt-1">
+                            This site isn&apos;t connected to WordPress, or automatic application failed/is unsupported for this tag &mdash; copy the snippet above and place it on your page.
                           </p>
                         )}
                       </div>

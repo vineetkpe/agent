@@ -10,6 +10,9 @@ import SignupsChart from "@/components/admin/SignupsChart";
 import UsageBreakdown from "@/components/admin/UsageBreakdown";
 import UsersTable from "@/components/admin/UsersTable";
 import ActivityFeed from "@/components/admin/ActivityFeed";
+import { AppSettingsPanel } from "@/components/admin/AppSettingsPanel";
+import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
+import { SiteManagementPanel } from "@/components/admin/SiteManagementPanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -17,12 +20,13 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings">("overview");
 
   const fetchStats = async () => {
     try {
       setLoading(true);
       setError(null);
-
+  
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push("/login");
@@ -86,7 +90,7 @@ export default function AdminPage() {
             Access Denied
           </span>
           <h2 className="text-2xl font-black font-mono mt-4 mb-2 text-zinc-950">403 Forbidden</h2>
-          <p className="text-sm text-zinc-550 leading-relaxed mb-8">
+          <p className="text-sm text-zinc-555 leading-relaxed mb-8">
             You do not have administrative privileges. Admin registration must match the configured environment variables.
           </p>
           <Link
@@ -108,7 +112,7 @@ export default function AdminPage() {
             <AlertCircle className="w-8 h-8 text-amber-500" />
           </div>
           <h2 className="text-2xl font-black font-mono mb-2 text-zinc-950">Initialization Failed</h2>
-          <p className="text-sm text-zinc-550 leading-relaxed mb-8">{error}</p>
+          <p className="text-sm text-zinc-555 leading-relaxed mb-8">{error}</p>
           <button
             onClick={fetchStats}
             type="button"
@@ -151,21 +155,79 @@ export default function AdminPage() {
         </button>
       </div>
 
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* KPI indicators */}
-        <KpiCards stats={stats} />
+      {/* Navigation tabs */}
+      <div className="max-w-7xl mx-auto flex border-b border-zinc-200 font-mono text-xs font-bold uppercase">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] transition-colors ${
+            activeTab === "overview" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("users")}
+          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+            activeTab === "users" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Users
+        </button>
+        <button
+          onClick={() => setActiveTab("sites")}
+          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+            activeTab === "sites" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Sites
+        </button>
+        <button
+          onClick={() => setActiveTab("settings")}
+          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+            activeTab === "settings" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Settings
+        </button>
+      </div>
 
-        {/* Signup charts and Usage metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <SignupsChart signups={stats.signupsLast30Days} />
-          <UsageBreakdown usage={stats.apiUsageLast30Days} />
-        </div>
+      <div className="max-w-7xl mx-auto">
+        {activeTab === "overview" && (
+          <div className="space-y-8 animate-fade-in">
+            {/* KPI indicators */}
+            <KpiCards stats={stats} />
 
-        {/* Users registry list and recent logs */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <UsersTable users={stats.usersList} totalUsers={stats.totalUsers} />
-          <ActivityFeed activity={stats.recentActivity} />
-        </div>
+            {/* Signup charts and Usage metrics */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <SignupsChart signups={stats.signupsLast30Days} />
+              <UsageBreakdown usage={stats.apiUsageLast30Days} />
+            </div>
+
+            {/* Users registry list and recent logs */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <UsersTable users={stats.usersList} totalUsers={stats.totalUsers} />
+              <ActivityFeed activity={stats.recentActivity} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "users" && (
+          <div className="animate-fade-in">
+            <UserManagementPanel />
+          </div>
+        )}
+
+        {activeTab === "sites" && (
+          <div className="animate-fade-in">
+            <SiteManagementPanel />
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="animate-fade-in">
+            <AppSettingsPanel />
+          </div>
+        )}
       </div>
     </div>
   );

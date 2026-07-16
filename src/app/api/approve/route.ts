@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
-import { publishWpPost } from "@/lib/wordpress";
+import { publishWpPost, resolveWpPostIdFromUrl, updateWpTitle, updateWpMetaDescription } from "@/lib/wordpress";
 import { getCurrentUser } from "@/lib/user";
 
 export async function POST(req: Request) {
@@ -128,10 +128,190 @@ export async function POST(req: Request) {
           message: "Approved! WordPress is not connected, please copy-paste the draft code below.",
         });
       }
+    } else if (item.type === "meta_title" || item.type === "meta_description") {
+      const site = item.site;
+      if (site.wpUrl && site.wpUsername && site.wpAppPasswordEncrypted) {
+        console.log(`[Auto-Apply] WordPress connected. Resolving post ID for URL: ${item.targetUrl}`);
+        try {
+          const appPassword = decrypt(site.wpAppPasswordEncrypted);
+
+          // 1. Resolve WordPress post/page ID
+          let postId: number | null = null;
+          let postType: "post" | "page" | null = null;
+
+          if (item.wpPostId) {
+            const parts = item.wpPostId.split(":");
+            if (parts.length === 2) {
+              postType = parts[0] as "post" | "page";
+              postId = parseInt(parts[1], 10);
+            }
+          }
+
+          if (!postId || !postType) {
+            const matched = await resolveWpPostIdFromUrl(
+              site.wpUrl,
+              site.wpUsername,
+              appPassword,
+              item.targetUrl
+            );
+            if (matched) {
+              postId = matched.id;
+              postType = matched.type;
+              // Cache resolved WP post ID
+              await prisma.auditItem.update({
+                where: { id: itemId },
+                data: { wpPostId: `${matched.type}:${matched.id}` },
+              });
+            }
+          }
+
+          if (!postId || !postType) {
+            const updatedItem = await prisma.auditItem.update({
+              where: { id: itemId },
+              data: {
+                status: "approved",
+                errorMessage: "Could not locate a matching WordPress post/page for this URL.",
+              },
+            });
+            return NextResponse.json({
+              success: true,
+              status: "approved",
+              item: updatedItem,
+              message: "Approved! Could not locate matching WordPress post/page URL, copy-paste the snippet instead.",
+            });
+          }
+
+          // 2. Update based on type
+          if (item.type === "meta_title") {
+            const updateResult = await updateWpTitle(
+              site.wpUrl,
+              site.wpUsername,
+              appPassword,
+              postId,
+              postType,
+              item.suggestedValue || ""
+            );
+
+            if (updateResult.success) {
+              const updatedItem = await prisma.auditItem.update({
+                where: { id: itemId },
+                data: {
+                  status: "applied",
+                  appliedAt: new Date(),
+                  errorMessage: null,
+                },
+              });
+              return NextResponse.json({
+                success: true,
+                status: "applied",
+                item: updatedItem,
+                message: "Meta title successfully updated on WordPress live!",
+              });
+            } else {
+              const updatedItem = await prisma.auditItem.update({
+                where: { id: itemId },
+                data: {
+                  status: "approved",
+                  errorMessage: `WordPress title update failed: ${updateResult.error}`,
+                },
+              });
+              return NextResponse.json({
+                success: true,
+                status: "approved",
+                item: updatedItem,
+                message: `WordPress Title Update API failed. Copy-paste snippet instead.`,
+              });
+            }
+          } else {
+            // item.type === "meta_description"
+            const plugin = site.detectedSeoPlugin as "yoast" | "rankmath" | null;
+            if (plugin && (plugin === "yoast" || plugin === "rankmath")) {
+              const updateResult = await updateWpMetaDescription(
+                site.wpUrl,
+                site.wpUsername,
+                appPassword,
+                postId,
+                postType,
+                plugin,
+                item.suggestedValue || ""
+              );
+
+              if (updateResult.success) {
+                const updatedItem = await prisma.auditItem.update({
+                  where: { id: itemId },
+                  data: {
+                    status: "applied",
+                    appliedAt: new Date(),
+                    errorMessage: null,
+                  },
+                });
+                return NextResponse.json({
+                  success: true,
+                  status: "applied",
+                  item: updatedItem,
+                  message: `Meta description successfully updated via ${plugin === "yoast" ? "Yoast" : "RankMath"}!`,
+                });
+              } else {
+                const updatedItem = await prisma.auditItem.update({
+                  where: { id: itemId },
+                  data: {
+                    status: "approved",
+                    errorMessage: updateResult.error || `Automatic meta description update was rejected by your WordPress site.`,
+                  },
+                });
+                return NextResponse.json({
+                  success: true,
+                  status: "approved",
+                  item: updatedItem,
+                  message: `Yoast/RankMath update not accepted. Copy-paste snippet instead.`,
+                });
+              }
+            } else {
+              const updatedItem = await prisma.auditItem.update({
+                where: { id: itemId },
+                data: {
+                  status: "approved",
+                  errorMessage: "No supported SEO plugin (Yoast / RankMath) detected on your WordPress site.",
+                },
+              });
+              return NextResponse.json({
+                success: true,
+                status: "approved",
+                item: updatedItem,
+                message: "Approved! Copy-paste description snippet.",
+              });
+            }
+          }
+        } catch (err: any) {
+          console.error("[Auto-Apply Meta Error]:", err);
+          const updatedItem = await prisma.auditItem.update({
+            where: { id: itemId },
+            data: {
+              status: "approved",
+              errorMessage: `WordPress update failed: ${err.message || err}`,
+            },
+          });
+          return NextResponse.json({
+            success: true,
+            status: "approved",
+            item: updatedItem,
+            message: `WordPress update failed: ${err.message || err}. Copy-paste snippet instead.`,
+          });
+        }
+      } else {
+        const updatedItem = await prisma.auditItem.update({
+          where: { id: itemId },
+          data: { status: "approved" },
+        });
+        return NextResponse.json({
+          success: true,
+          status: "approved",
+          item: updatedItem,
+          message: "Approved! WordPress is not connected, please copy-paste the metadata.",
+        });
+      }
     } else {
-      // For SEO Meta tag modifications (meta_title, meta_description, schema_markup)
-      // Since auto-updating HTML tags requires plugin access or write back headers,
-      // in V1 we mark it as approved, showing it on the dashboard as a copy-paste snippet.
+      // For all other types
       const updatedItem = await prisma.auditItem.update({
         where: { id: itemId },
         data: { status: "approved" },

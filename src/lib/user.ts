@@ -42,6 +42,40 @@ export async function getOrCreateDefaultUser() {
  * Creates a database User row on first login if it does not exist.
  */
 export async function getCurrentUser(req: Request) {
+  // A. Check Impersonation Token
+  const impersonationToken = req.headers.get("x-impersonation-token");
+  if (impersonationToken) {
+    try {
+      const { decrypt } = await import("./crypto");
+      const decrypted = decrypt(impersonationToken);
+      const payload = JSON.parse(decrypted);
+
+      if (payload && payload.expiresAt > Date.now()) {
+        const targetUser = await prisma.user.findUnique({
+          where: { id: payload.targetUserId },
+        });
+
+        const adminUser = await prisma.user.findUnique({
+          where: { id: payload.adminUserId },
+        });
+
+        if (targetUser && adminUser && adminUser.isAdmin) {
+          console.log(`[Auth] Impersonation Session: Admin ${adminUser.email} is viewing ${targetUser.email}`);
+          if (targetUser.suspended) {
+            console.warn(`[Auth] Impersonation failed: Target user ${targetUser.email} is suspended.`);
+            return null;
+          }
+          return {
+            ...targetUser,
+            __impersonatedBy: adminUser.id,
+          };
+        }
+      }
+    } catch (impersonateErr) {
+      console.error("[Auth] Impersonation token validation failed:", impersonateErr);
+    }
+  }
+
   let token = "";
 
   // 1. Check Authorization Header
@@ -54,7 +88,12 @@ export async function getCurrentUser(req: Request) {
   if (!token) {
     if (process.env.NODE_ENV !== "production") {
       console.log("[Auth] [DEV-ONLY] No session token found. Using dev-only default user fallback.");
-      return await getOrCreateDefaultUser();
+      const devUser = await getOrCreateDefaultUser();
+      if (devUser && devUser.suspended) {
+        console.warn(`[Auth] Dev user ${devUser.email} is suspended.`);
+        return null;
+      }
+      return devUser;
     }
     return null;
   }
@@ -113,6 +152,11 @@ export async function getCurrentUser(req: Request) {
         });
         console.log(`[Auth] Granted admin access to: ${dbUser.email}`);
       }
+    }
+
+    if (dbUser.suspended) {
+      console.warn(`[Auth] User ${dbUser.email} is suspended. Access denied.`);
+      return null;
     }
 
     return dbUser;

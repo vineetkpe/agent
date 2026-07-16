@@ -14,6 +14,7 @@ import { Chatbot } from "@/components/dashboard/Chatbot";
 import { SitesTab } from "@/components/dashboard/SitesTab";
 import { AIContextTab } from "@/components/dashboard/AIContextTab";
 import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
+import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { ChevronRight, Menu } from "lucide-react";
 
 export default function DashboardPage() {
@@ -66,10 +67,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex font-sans selection:bg-violet-500 selection:text-white relative bg-zinc-50 text-zinc-800">
-      {/* Background ambient light */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none -z-10 bg-violet-500/3" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none -z-10 bg-indigo-500/3" />
+    <div className="min-h-screen flex flex-col font-sans selection:bg-violet-500 selection:text-white relative bg-zinc-50 text-zinc-800">
+      <ImpersonationBanner />
+      <div className="flex-1 flex relative">
+        {/* Background ambient light */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none -z-10 bg-violet-500/3" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[160px] pointer-events-none -z-10 bg-indigo-500/3" />
 
       <Sidebar
         activeTab={data.activeTab}
@@ -157,6 +160,7 @@ export default function DashboardPage() {
               currentAudit={data.currentAudit}
               selectTab={data.selectTab}
               pastAudits={data.pastAudits}
+              activityLog={data.activityLog}
             />
           )}
 
@@ -245,6 +249,7 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+      </div>
       <Chatbot currentSite={data.currentSite} />
     </div>
   );

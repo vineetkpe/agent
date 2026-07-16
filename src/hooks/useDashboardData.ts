@@ -14,6 +14,7 @@ export function useDashboardData() {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [activityLog, setActivityLog] = useState<any[]>([]);
 
   const [wpUrl, setWpUrl] = useState("");
   const [wpUsername, setWpUsername] = useState("");
@@ -50,6 +51,14 @@ export function useDashboardData() {
     if (session?.access_token) {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
+
+    if (typeof window !== "undefined") {
+      const impToken = localStorage.getItem("impersonation_token");
+      if (impToken) {
+        headers["x-impersonation-token"] = impToken;
+      }
+    }
+
     return headers;
   };
 
@@ -80,6 +89,11 @@ export function useDashboardData() {
         }
         if (data.pastAudits) {
           setPastAudits(data.pastAudits);
+        }
+        if (data.activityLog) {
+          setActivityLog(data.activityLog);
+        } else {
+          setActivityLog([]);
         }
         if (data.allSites) {
           setAllSites(data.allSites);
@@ -367,6 +381,7 @@ export function useDashboardData() {
     currentSite,
     currentAudit,
     errorMessage,
+    activityLog,
     wpUrl,
     setWpUrl,
     wpUsername,

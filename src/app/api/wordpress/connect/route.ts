@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyWpConnection, normalizeWpUrl } from "@/lib/wordpress";
+import { verifyWpConnection, normalizeWpUrl, detectSeoPlugin } from "@/lib/wordpress";
 import { encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
@@ -30,6 +30,16 @@ export async function POST(req: Request) {
     }
     const normalizedSiteUrl = new URL(targetSiteUrl).origin;
 
+    // TRUST-3: Lock WordPress domain connection
+    const wpHostname = new URL(normalizedWpUrl).hostname.replace(/^www\./i, "");
+    const siteHostname = new URL(normalizedSiteUrl).hostname.replace(/^www\./i, "");
+    if (wpHostname !== siteHostname) {
+      return NextResponse.json(
+        { error: `WordPress site domain must match the crawled website (${normalizedSiteUrl}). Add and crawl that site first if you want to connect a different domain.` },
+        { status: 400 }
+      );
+    }
+
     // SSRF Checks (SEC-2 SSRF protection)
     if (!(await isSafeUrlToFetch(normalizedWpUrl)) || !(await isSafeUrlToFetch(normalizedSiteUrl))) {
       return NextResponse.json(
@@ -46,6 +56,9 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+
+    // Detect SEO Plugin
+    const detectedPlugin = await detectSeoPlugin(normalizedWpUrl);
 
     // 3. Encrypt the application password
     const encryptedPassword = encrypt(appPassword);
@@ -65,6 +78,8 @@ export async function POST(req: Request) {
           wpUrl: normalizedWpUrl,
           wpUsername: username,
           wpAppPasswordEncrypted: encryptedPassword,
+          detectedSeoPlugin: detectedPlugin,
+          wpConnectedAt: new Date(),
         },
       });
     } else {
@@ -75,6 +90,8 @@ export async function POST(req: Request) {
           wpUrl: normalizedWpUrl,
           wpUsername: username,
           wpAppPasswordEncrypted: encryptedPassword,
+          detectedSeoPlugin: detectedPlugin,
+          wpConnectedAt: new Date(),
         },
       });
     }

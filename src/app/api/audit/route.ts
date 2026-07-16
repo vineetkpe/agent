@@ -11,6 +11,18 @@ import { isSafeUrlToFetch } from "@/lib/urlSafety";
 const geminiResponseSchema = {
   type: "OBJECT",
   properties: {
+    keywordOpportunities: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          keyword: { type: "STRING" },
+          rationale: { type: "STRING" },
+          intent: { type: "STRING", enum: ["informational", "transactional"] },
+        },
+        required: ["keyword", "rationale", "intent"],
+      },
+    },
     fixes: {
       type: "ARRAY",
       items: {
@@ -31,12 +43,13 @@ const geminiResponseSchema = {
           title: { type: "STRING" },
           content: { type: "STRING" },
           suggestedSlug: { type: "STRING" },
+          targetKeyword: { type: "STRING" },
         },
-        required: ["title", "content", "suggestedSlug"],
+        required: ["title", "content", "suggestedSlug", "targetKeyword"],
       },
     },
   },
-  required: ["fixes", "blogPosts"],
+  required: ["keywordOpportunities", "fixes", "blogPosts"],
 };
 
 export async function GET(req: Request) {
@@ -63,6 +76,8 @@ export async function GET(req: Request) {
           gscConnected: true,
           gscUrl: true,
           businessProfile: true,
+          wpConnectedAt: true,
+          detectedSeoPlugin: true,
           createdAt: true,
         },
       });
@@ -79,6 +94,8 @@ export async function GET(req: Request) {
           gscConnected: true,
           gscUrl: true,
           businessProfile: true,
+          wpConnectedAt: true,
+          detectedSeoPlugin: true,
           createdAt: true,
         },
       });
@@ -95,6 +112,8 @@ export async function GET(req: Request) {
         gscConnected: true,
         gscUrl: true,
         businessProfile: true,
+        wpConnectedAt: true,
+        detectedSeoPlugin: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -129,11 +148,98 @@ export async function GET(req: Request) {
       },
     });
 
+    // Build Activity Log
+    const siteAudits = await prisma.audit.findMany({
+      where: { siteId: site.id },
+      include: {
+        _count: {
+          select: { items: true }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const siteAuditItems = await prisma.auditItem.findMany({
+      where: { siteId: site.id },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const activityLog: any[] = [];
+
+    // Add audits
+    for (const aud of siteAudits) {
+      if (aud.status === "completed") {
+        activityLog.push({
+          id: `audit-${aud.id}`,
+          type: "audit_completed",
+          timestamp: aud.createdAt,
+          title: "Crawl completed",
+          detail: `Found ${aud._count.items} issues/recommendations.`,
+        });
+      }
+    }
+
+    // Add status transitions
+    for (const item of siteAuditItems) {
+      if (item.status === "applied") {
+        let postTitle = "";
+        let wpLink = "";
+        if (item.type === "blog_post" && item.suggestedValue) {
+          try {
+            const parsed = JSON.parse(item.suggestedValue);
+            postTitle = parsed.title || "";
+            wpLink = parsed.wpLink || "";
+          } catch {}
+        }
+        activityLog.push({
+          id: `apply-${item.id}`,
+          type: "item_applied",
+          timestamp: item.appliedAt || item.updatedAt,
+          title: item.type === "blog_post" 
+            ? `Published to WordPress: ${postTitle || "Blog Post"}` 
+            : `Applied fix: ${item.type.replace("_", " ")}`,
+          detail: `For ${item.targetUrl}`,
+          link: wpLink || undefined,
+        });
+      } else if (item.status === "approved") {
+        activityLog.push({
+          id: `approve-${item.id}`,
+          type: "item_approved",
+          timestamp: item.updatedAt,
+          title: `Approved: ${item.type.replace("_", " ")}`,
+          detail: `For ${item.targetUrl}`,
+        });
+      } else if (item.status === "rejected") {
+        activityLog.push({
+          id: `reject-${item.id}`,
+          type: "item_rejected",
+          timestamp: item.updatedAt,
+          title: `Rejected: ${item.type.replace("_", " ")}`,
+          detail: `For ${item.targetUrl}`,
+        });
+      }
+    }
+
+    // Add WP connection event
+    if (site.wpConnectedAt) {
+      activityLog.push({
+        id: `wp-conn-${site.id}`,
+        type: "wp_connected",
+        timestamp: site.wpConnectedAt,
+        title: "Connected to WordPress",
+        detail: `Credentials configured for ${site.wpUrl}`,
+      });
+    }
+
+    // Sort by timestamp desc
+    activityLog.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
     return NextResponse.json({
       site,
       audit: latestAudit,
       pastAudits,
       allSites,
+      activityLog,
       user: {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,
@@ -189,7 +295,23 @@ export async function POST(req: Request) {
       });
 
       if (latestAudit) {
-        const cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES || "5", 10);
+        let cooldownMinutes = 5;
+        try {
+          const settings = await prisma.appSettings.findFirst({
+            where: { id: "singleton" }
+          });
+          if (settings && settings.auditCooldownMinutes !== null && settings.auditCooldownMinutes !== undefined) {
+            cooldownMinutes = settings.auditCooldownMinutes;
+          } else if (process.env.AUDIT_COOLDOWN_MINUTES) {
+            cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES, 10);
+          }
+        } catch (settingsErr) {
+          console.error("[Audit Route] Failed to load AppSettings:", settingsErr);
+          if (process.env.AUDIT_COOLDOWN_MINUTES) {
+            cooldownMinutes = parseInt(process.env.AUDIT_COOLDOWN_MINUTES, 10);
+          }
+        }
+
         const nextAllowedTime = latestAudit.createdAt.getTime() + cooldownMinutes * 60 * 1000;
         const now = Date.now();
         if (now < nextAllowedTime) {
@@ -303,7 +425,8 @@ ${JSON.stringify(
 )}
 
 Based on this audit data, please generate:
-1. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', or 'duplicate_content' issue.
+1. A list of 3-5 'quick win' keyword opportunities specific to this business, each containing the keyword phrase, why it's realistically winnable soon (long-tail, local-intent, low apparent competition, directly matches a service/product this business actually offers per its crawled content/business profile), and estimated intent (informational vs transactional).
+2. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', or 'duplicate_content' issue.
    - For 'meta_title' issues: Provide an optimized title tag between 30 and 60 characters.
    - For 'meta_description' issues: Provide an optimized meta description between 120 and 160 characters.
    - For 'schema_markup' issues: Provide a valid schema.org LocalBusiness or Article JSON-LD markup string.
@@ -314,22 +437,26 @@ Based on this audit data, please generate:
    - For 'social_meta' issues: Provide the missing OpenGraph / Twitter meta HTML snippets (og:title, og:description, etc.).
    - For 'duplicate_content' issues: Provide a suggested unique title or meta description alternative to resolve duplication.
    Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly.
-2. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->).
+3. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->). Each blog post must be built around one of the identified quick-win keywords.
 
 Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 {
+  "keywordOpportunities": [
+    { "keyword": "string", "rationale": "string", "intent": "informational" | "transactional" }
+  ],
   "fixes": [
     { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content", "suggestedValue": "string" }
   ],
   "blogPosts": [
-    { "title": "string", "content": "string", "suggestedSlug": "string" }
+    { "title": "string", "content": "string", "suggestedSlug": "string", "targetKeyword": "string" }
   ]
 }
 `;
 
     const aiResponse = await generateStructuredJson<{
+      keywordOpportunities: { keyword: string; rationale: string; intent: string }[];
       fixes: { targetUrl: string; type: string; suggestedValue: string }[];
-      blogPosts: { title: string; content: string; suggestedSlug: string }[];
+      blogPosts: { title: string; content: string; suggestedSlug: string; targetKeyword: string }[];
     }>(systemPrompt, geminiResponseSchema, currentUser.id);
 
     // 7. Save pending items to the database
@@ -373,6 +500,29 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
               title: post.title,
               content: post.content,
               slug: post.suggestedSlug,
+              targetKeyword: post.targetKeyword,
+            }),
+            status: "pending",
+          },
+        });
+        savedItems.push(item);
+      }
+    }
+
+    // Save Keyword Opportunities
+    if (aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
+      for (const opp of aiResponse.keywordOpportunities) {
+        const item = await prisma.auditItem.create({
+          data: {
+            auditId: audit.id,
+            siteId: site.id,
+            type: "keyword_opportunity",
+            targetUrl: cleanUrl,
+            currentValue: "",
+            suggestedValue: JSON.stringify({
+              keyword: opp.keyword,
+              rationale: opp.rationale,
+              intent: opp.intent,
             }),
             status: "pending",
           },

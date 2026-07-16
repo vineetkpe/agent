@@ -3,24 +3,57 @@ import * as groqProvider from "./aiProviders/groq";
 import * as openrouterProvider from "./aiProviders/openrouter";
 import { prisma } from "./prisma";
 
-const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+interface CachedConfig {
+  provider: string;
+  isMock: boolean;
+  resolvedAt: number;
+}
 
-const isMock = (() => {
-  if (provider === "groq") {
+let cachedConfig: CachedConfig | null = null;
+const CACHE_TTL_MS = 30 * 1000;
+
+export async function getActiveProviderConfig(): Promise<{ provider: string; isMock: boolean }> {
+  const now = Date.now();
+  if (cachedConfig && (now - cachedConfig.resolvedAt) < CACHE_TTL_MS) {
+    return cachedConfig;
+  }
+
+  let resolvedProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+
+  try {
+    const settings = await prisma.appSettings.findFirst({
+      where: { id: "singleton" },
+    });
+    if (settings?.aiProvider) {
+      resolvedProvider = settings.aiProvider.toLowerCase();
+    }
+  } catch (err) {
+    console.error("[AI Provider Cache] Failed to load settings from database:", err);
+  }
+
+  let resolvedIsMock = false;
+  if (resolvedProvider === "groq") {
     const key = process.env.GROQ_API_KEY;
-    return !key || key === "mock-groq-key";
-  }
-  if (provider === "openrouter") {
+    resolvedIsMock = !key || key === "mock-groq-key";
+  } else if (resolvedProvider === "openrouter") {
     const key = process.env.OPENROUTER_API_KEY;
-    return !key || key === "mock-openrouter-key";
+    resolvedIsMock = !key || key === "mock-openrouter-key";
+  } else {
+    const key = process.env.GEMINI_API_KEY;
+    resolvedIsMock = !key || key === "mock-gemini-key";
   }
-  // Default to gemini
-  const key = process.env.GEMINI_API_KEY;
-  return !key || key === "mock-gemini-key";
-})();
+
+  cachedConfig = {
+    provider: resolvedProvider,
+    isMock: resolvedIsMock,
+    resolvedAt: now,
+  };
+
+  return cachedConfig;
+}
 
 // Async fire-and-forget logger helper
-function logApiUsage(callType: string, success: boolean, userId?: string) {
+function logApiUsage(callType: string, success: boolean, provider: string, userId?: string) {
   prisma.apiUsageLog
     .create({
       data: {
@@ -39,10 +72,12 @@ function logApiUsage(callType: string, success: boolean, userId?: string) {
  * Basic text generation function wrapper.
  */
 export async function generateContent(prompt: string, userId?: string): Promise<string> {
+  const { provider, isMock } = await getActiveProviderConfig();
+
   if (isMock) {
     console.log(`[AI Provider] Using mock text generation (Provider: ${provider}).`);
     const result = generateMockText(prompt);
-    logApiUsage("generateContent", false, userId);
+    logApiUsage("generateContent", false, provider, userId);
     return result;
   }
 
@@ -56,11 +91,11 @@ export async function generateContent(prompt: string, userId?: string): Promise<
       result = await geminiProvider.generateContent(prompt);
     }
 
-    logApiUsage("generateContent", true, userId);
+    logApiUsage("generateContent", true, provider, userId);
     return result;
   } catch (error: any) {
     console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateContent:`, error);
-    logApiUsage("generateContent", false, userId);
+    logApiUsage("generateContent", false, provider, userId);
     throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
   }
 }
@@ -74,10 +109,12 @@ export async function generateStructuredJson<T>(
   responseSchema?: any,
   userId?: string
 ): Promise<T> {
+  const { provider, isMock } = await getActiveProviderConfig();
+
   if (isMock) {
     console.log(`[AI Provider] Using mock JSON generation (Provider: ${provider}).`);
     const result = generateMockJson<T>(prompt);
-    logApiUsage("generateStructuredJson", false, userId);
+    logApiUsage("generateStructuredJson", false, provider, userId);
     return result;
   }
 
@@ -91,11 +128,11 @@ export async function generateStructuredJson<T>(
       result = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
     }
 
-    logApiUsage("generateStructuredJson", true, userId);
+    logApiUsage("generateStructuredJson", true, provider, userId);
     return result;
   } catch (error: any) {
     console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateStructuredJson:`, error);
-    logApiUsage("generateStructuredJson", false, userId);
+    logApiUsage("generateStructuredJson", false, provider, userId);
     throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
   }
 }
@@ -128,9 +165,17 @@ interface MockBlogPost {
   title: string;
   content: string;
   suggestedSlug: string;
+  targetKeyword: string;
+}
+
+interface MockKeywordOpportunity {
+  keyword: string;
+  rationale: string;
+  intent: string;
 }
 
 interface MockAuditResult {
+  keywordOpportunities: MockKeywordOpportunity[];
   fixes: MockSeoFix[];
   blogPosts: MockBlogPost[];
 }
@@ -205,7 +250,22 @@ function generateMockJson<T>(prompt: string): T {
       mockAlt = `Fast cloud servers dashboard running high performance websites`;
     }
 
+    const kw1 = isHosting ? "nvme ssd cloud hosting advantages" : `local ${category || "service"} provider`;
+    const kw2 = isHosting ? "managed vps servers for small business" : `best ${category || "services"} near me`;
+
     const mockResponse: MockAuditResult = {
+      keywordOpportunities: [
+        {
+          keyword: kw1,
+          rationale: "High local search volume with low initial content competition.",
+          intent: "informational"
+        },
+        {
+          keyword: kw2,
+          rationale: "Highly transactional intent, matches commercial customer queries.",
+          intent: "transactional"
+        }
+      ],
       fixes: [
         {
           targetUrl: targetUrl,
@@ -253,6 +313,7 @@ function generateMockJson<T>(prompt: string): T {
             ? "<!-- wp:paragraph -->\n<p>Uptime and page speeds are essential ranking elements on search results. Investing in SSD server storage makes a massive difference...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Switch to NVMe SSD Storage Hosting</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Older server systems use mechanical HDDs, which drag load speeds down. NVMe options retrieve files instantly...</p>\n<!-- /wp:paragraph -->"
             : `<!-- wp:paragraph -->\n<p>Choosing a reliable contractor or partner is crucial for long term success. Here are key criteria to look for...</p>\n<!-- /wp:paragraph -->`,
           suggestedSlug: isHosting ? "hosting-speed-core-web-vitals" : "choose-best-service-provider",
+          targetKeyword: kw1,
         },
         {
           title: isHosting
@@ -262,6 +323,7 @@ function generateMockJson<T>(prompt: string): T {
             ? "<!-- wp:paragraph -->\n<p>Server exploits can destroy your reputation. Lock down your website with free SSL credentials, strong credentials, and isolated profiles...</p>\n<!-- /wp:paragraph -->"
             : "<!-- wp:paragraph -->\n<p>Regular inspections prevent costly emergency fixes down the road. Set up scheduled checkups at least twice a year...</p>\n<!-- /wp:paragraph -->",
           suggestedSlug: isHosting ? "protect-server-security" : "essential-maintenance-checklist",
+          targetKeyword: kw2,
         },
       ],
     };
