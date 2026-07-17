@@ -7,6 +7,7 @@ import { IssueBreakdownChart } from "./charts/IssueBreakdownChart";
 import { ApprovalFunnelChart } from "./charts/ApprovalFunnelChart";
 
 import { AgentActivityLog } from "./AgentActivityLog";
+import { UptimeWidget } from "./UptimeWidget";
 
 interface OverviewTabProps {
   currentSite: any;
@@ -14,6 +15,9 @@ interface OverviewTabProps {
   selectTab: (tab: any) => void;
   pastAudits?: any[];
   activityLog?: any[];
+  uptimeChecks?: any[];
+  currentUser?: any;
+  onRefresh?: () => void;
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -22,32 +26,65 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   selectTab,
   pastAudits = [],
   activityLog = [],
+  uptimeChecks = [],
+  currentUser,
+  onRefresh,
 }) => {
   if (!currentAudit) {
     return (
       <div className="space-y-8 animate-slide-up">
-        <Card variant="shadow" className="max-w-2xl mx-auto text-center p-12 space-y-6 my-12">
-          <div className="w-16 h-16 rounded-full border-2 border-zinc-950 flex items-center justify-center mx-auto bg-violet-50 text-violet-600 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
-            <Sparkles className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase font-mono">
-              Initialize Your AI Growth Routine
+        {/* Domain Quick Overview Card */}
+        <Card variant="flat" className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-zinc-900">
+              <Sparkles className="w-6 h-6 text-violet-500" /> HeyDrona AI Employee Workspace
             </h2>
-            <p className="text-sm text-zinc-600 max-w-md mx-auto leading-relaxed">
-              No SEO crawls or diagnostics audits have been executed for your site yet. Start now to analyze sitemaps, target keywords, and publish optimization tags.
+            <p className="text-xs mt-1 leading-relaxed text-zinc-655">
+              Connecting:{" "}
+              <span className="text-violet-650 font-mono font-bold">
+                {currentSite?.url || "No website connected yet"}
+              </span>
+              . Running autonomous digital growth routines daily.
             </p>
           </div>
-          <div className="flex justify-center">
-            <button
-              onClick={() => selectTab("crawler")}
-              type="button"
-              className="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm tracking-wider uppercase transition-all duration-200 border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_rgba(9,9,11,1)] flex items-center gap-2"
-            >
-              Run Your First Crawl <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
         </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card variant="flat" className="text-center p-12 space-y-6 bg-zinc-50/10 border-2 border-dashed border-zinc-250 rounded-2xl">
+              <div className="w-16 h-16 rounded-full border-2 border-zinc-950 flex items-center justify-center mx-auto bg-violet-50 text-violet-600 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase font-mono">
+                  Initialize Your AI Growth Routine
+                </h2>
+                <p className="text-sm text-zinc-600 max-w-md mx-auto leading-relaxed">
+                  No SEO crawls or diagnostics audits have been executed for your site yet. Start now to analyze sitemaps, target keywords, and publish optimization tags.
+                </p>
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onClick={() => selectTab("crawler")}
+                  type="button"
+                  className="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm tracking-wider uppercase transition-all duration-200 border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_rgba(9,9,11,1)] flex items-center gap-2"
+                >
+                  Run Your First Crawl <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </Card>
+          </div>
+          <div className="lg:col-span-1">
+            {onRefresh && (
+              <UptimeWidget
+                currentSite={currentSite}
+                uptimeChecks={uptimeChecks}
+                currentUser={currentUser}
+                onRefresh={onRefresh}
+              />
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -61,7 +98,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const activityItems = [...items]
     .sort((a: any, b: any) => {
       const timeA = a.appliedAt ? new Date(a.appliedAt).getTime() : new Date(a.createdAt).getTime();
-      const timeB = b.appliedAt ? new Date(b.appliedAt).getTime() : new Date(b.createdAt).getTime();
+      const timeB = b.appliedAt ? new Date(b.appliedAt).getTime() : b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return timeB - timeA;
     })
     .slice(0, 5);
@@ -193,14 +230,26 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </Card>
       </div>
 
-      {/* Two Column Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ScoreTrendChart pastAudits={pastAudits} />
-        <IssueBreakdownChart items={items} />
+      {/* Two Column Charts & Uptime Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ScoreTrendChart pastAudits={pastAudits} />
+            <IssueBreakdownChart items={items} />
+          </div>
+          <ApprovalFunnelChart items={items} />
+        </div>
+        <div className="lg:col-span-1">
+          {onRefresh && (
+            <UptimeWidget
+              currentSite={currentSite}
+              uptimeChecks={uptimeChecks}
+              currentUser={currentUser}
+              onRefresh={onRefresh}
+            />
+          )}
+        </div>
       </div>
-
-      {/* Funnel Chart Row */}
-      <ApprovalFunnelChart items={items} />
 
       {/* Real Agent Activity Log */}
       <AgentActivityLog activityLog={activityLog} />

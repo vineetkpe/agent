@@ -116,32 +116,44 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ selectTab })
                 No events recorded. Run an audit to see real-time updates!
               </div>
             ) : (
-              notifications.map((n) => {
-                const isUnread = !lastCheck || new Date(n.timestamp).getTime() > new Date(lastCheck).getTime();
-                return (
-                  <button
-                    key={n.id}
-                    onClick={() => {
-                      selectTab(n.tabLink);
-                      setIsOpen(false);
-                    }}
-                    type="button"
-                    className={`w-full p-3 text-left hover:bg-zinc-50 transition-colors flex flex-col gap-1 relative ${
-                      isUnread ? "bg-violet-50/20" : ""
-                    }`}
-                  >
-                    {isUnread && (
-                      <span className="absolute top-3.5 right-3.5 w-1.5 h-1.5 rounded-full bg-violet-650" />
-                    )}
-                    <span className="text-[11px] font-bold text-zinc-800 pr-4">{n.title}</span>
-                    <span className="text-[10px] text-zinc-500 leading-normal font-sans">{n.detail}</span>
-                    <span className="text-[9px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
-                      <Clock className="w-3 h-3" />
-                      {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </button>
-                );
-              })
+              <>
+                {notifications.map((n) => {
+                  const isUnread = !lastCheck || new Date(n.timestamp).getTime() > new Date(lastCheck).getTime();
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        selectTab("notifications");
+                        setIsOpen(false);
+                      }}
+                      type="button"
+                      className={`w-full p-3 text-left hover:bg-zinc-50 transition-colors flex flex-col gap-1 relative ${
+                        isUnread ? "bg-violet-50/20" : ""
+                      }`}
+                    >
+                      {isUnread && (
+                        <span className="absolute top-3.5 right-3.5 w-1.5 h-1.5 rounded-full bg-violet-650" />
+                      )}
+                      <span className="text-[11px] font-bold text-zinc-800 pr-4">{n.title}</span>
+                      <span className="text-[10px] text-zinc-505 leading-normal font-sans">{n.detail}</span>
+                      <span className="text-[9px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                        <Clock className="w-3 h-3" />
+                        {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => {
+                    selectTab("notifications");
+                    setIsOpen(false);
+                  }}
+                  type="button"
+                  className="w-full py-2.5 bg-zinc-50 hover:bg-zinc-100 text-[10px] text-violet-650 font-bold text-center block uppercase tracking-wider font-mono border-t border-zinc-200 cursor-pointer"
+                >
+                  View All Alerts →
+                </button>
+              </>
             )}
           </div>
         </div>

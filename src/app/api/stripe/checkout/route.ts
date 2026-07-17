@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const isMock = !stripeSecret || stripeSecret === "mock-stripe-key";
 
-// Initialize Stripe if a valid key is provided
 const stripe = !isMock ? new Stripe(stripeSecret!, { apiVersion: "2025-01-27.accredited-preview" as any }) : null;
 
 export async function POST(req: Request) {
@@ -16,43 +15,58 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    let plan: string;
+    let planSlug: string;
+    let billingInterval: "monthly" | "annual" = "monthly";
+    let promoCode: string | null = null;
+
     try {
       const body = await req.json();
-      plan = body.plan;
+      planSlug = (body.plan || "").trim().toLowerCase();
+      if (body.billingInterval === "annual") {
+        billingInterval = "annual";
+      }
+      if (body.promoCode) {
+        promoCode = String(body.promoCode).trim();
+      }
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    if (!plan || !["starter", "growth", "agency"].includes(plan)) {
-      return NextResponse.json(
-        { error: "Invalid or missing plan parameter. Must be 'starter', 'growth', or 'agency'." },
-        { status: 400 }
-      );
+    if (!planSlug) {
+      return NextResponse.json({ error: "Missing plan slug parameter." }, { status: 400 });
     }
 
-    const PLAN_DETAILS: Record<string, { name: string; amount: number; description: string }> = {
-      starter: {
-        name: "Starter Plan",
-        amount: 1900,
-        description: "1 website, manual audits (24h cooldown), full AI fixes, WordPress one-click apply, AI chat assistant",
-      },
-      growth: {
-        name: "Growth Plan",
-        amount: 4900,
-        description: "Up to 3 websites, everything in Starter, weekly automatic re-scan + email digest, downloadable PDF SEO reports",
-      },
-      agency: {
-        name: "Agency Plan",
-        amount: 9900,
-        description: "Up to 10 websites, everything in Growth, white-label PDF reports (your logo, not ours), fastest audit cooldown",
-      },
-    };
+    // 1. Dynamic DB Plan lookup
+    const planRecord = await prisma.plan.findUnique({
+      where: { slug: planSlug }
+    });
 
-    const selectedPlan = PLAN_DETAILS[plan];
+    if (!planRecord) {
+      return NextResponse.json({ error: `Selected plan '${planSlug}' was not found in the database.` }, { status: 404 });
+    }
 
+    if (!planRecord.isActive) {
+      return NextResponse.json({ error: `Selected plan '${planRecord.name}' is archived and no longer offered.` }, { status: 400 });
+    }
+
+    // Resolve amount and interval
+    let amount = planRecord.monthlyPriceCents;
+    let interval: "month" | "year" = "month";
+
+    if (billingInterval === "annual") {
+      if (!planRecord.annualPriceCents) {
+        return NextResponse.json({ error: `Annual billing is not supported for plan: ${planRecord.name}` }, { status: 400 });
+      }
+      amount = planRecord.annualPriceCents;
+      interval = "year";
+    }
+
+    // CRITICAL: Changing a plan's price in the database only affects NEW checkout sessions.
+    // Existing active subscribers keep their original price point until they cancel or resubscribe.
+    // This is intentional behavior to respect customer subscriptions and lock-in rates.
+
+    // 2. Mock mode handling for local development
     if (isMock || !stripe) {
-      // SAFETY-1: Stripe mock-mode must fail loudly in production instead of granting free access
       if (process.env.NODE_ENV === "production") {
         console.error("[Stripe Checkout] Attempted to run mock billing subscription checkout in production mode!");
         return NextResponse.json(
@@ -61,14 +75,13 @@ export async function POST(req: Request) {
         );
       }
 
-      console.log(`[Stripe Checkout] Simulating Stripe Checkout subscription flow for dev user ${currentUser.email} (Mock Mode: Plan ${plan}).`);
-      
-      // Mock flow: immediately toggle subscriptionActive to true in local SQLite DB
+      console.log(`[Stripe Checkout] [MOCK MODE] Simulating checkout: User=${currentUser.email}, Plan=${planRecord.slug}, Price=${amount} cents, Interval=${interval}, PromoCode=${promoCode || "none"}`);
+
       await prisma.user.update({
         where: { id: currentUser.id },
         data: {
           subscriptionActive: true,
-          plan: plan,
+          plan: planRecord.slug,
           planSource: "stripe",
           planActivatedAt: new Date(),
         },
@@ -80,22 +93,22 @@ export async function POST(req: Request) {
       });
     }
 
-    // Live Stripe Integration Flow
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3050";
+    // 3. Live Stripe Checkout Session creation
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    const session = await stripe.checkout.sessions.create({
+    const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
-              name: selectedPlan.name,
-              description: selectedPlan.description,
+              name: planRecord.name,
+              description: `${planRecord.name} - ${billingInterval === "annual" ? "Annual" : "Monthly"} Billing`,
             },
-            unit_amount: selectedPlan.amount,
+            unit_amount: amount,
             recurring: {
-              interval: "month",
+              interval: interval,
             },
           },
           quantity: 1,
@@ -107,9 +120,33 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/#pricing`,
       metadata: {
         userId: currentUser.id,
-        plan: plan,
+        plan: planRecord.slug,
       },
-    });
+    };
+
+    // Apply promotion code discount if active
+    if (promoCode) {
+      try {
+        console.log(`[Stripe Checkout] Querying active promotion code for: ${promoCode}`);
+        const promoCodesList = await stripe.promotionCodes.list({
+          code: promoCode,
+          active: true,
+          limit: 1,
+        });
+
+        if (promoCodesList.data.length > 0) {
+          const matchedPromo = promoCodesList.data[0];
+          console.log(`[Stripe Checkout] Applied promotion code ${matchedPromo.id} (${promoCode})`);
+          sessionOptions.discounts = [{ promotion_code: matchedPromo.id }];
+        } else {
+          console.warn(`[Stripe Checkout] Promotion code '${promoCode}' was not found or is inactive on Stripe.`);
+        }
+      } catch (promoErr) {
+        console.error("[Stripe Checkout] Error checking Stripe promotion code:", promoErr);
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionOptions);
 
     return NextResponse.json({
       success: true,

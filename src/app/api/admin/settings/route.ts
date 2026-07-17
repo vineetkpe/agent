@@ -15,10 +15,14 @@ export async function GET(req: Request) {
     });
 
     const envProvider = process.env.AI_PROVIDER || "gemini";
+    const envPriority = process.env.AI_PROVIDER_PRIORITY || "gemini,groq,openrouter";
     const envCooldown = process.env.AUDIT_COOLDOWN_MINUTES || "5";
 
     const aiProvider = settings?.aiProvider || envProvider;
     const aiProviderSource = settings?.aiProvider ? "database" : "env-default";
+
+    const aiProviderPriority = settings?.aiProviderPriority || envPriority;
+    const aiProviderPrioritySource = settings?.aiProviderPriority ? "database" : "env-default";
 
     const auditCooldownMinutes = settings?.auditCooldownMinutes !== null && settings?.auditCooldownMinutes !== undefined
       ? settings.auditCooldownMinutes
@@ -31,9 +35,12 @@ export async function GET(req: Request) {
       settings: {
         aiProvider,
         aiProviderSource,
+        aiProviderPriority,
+        aiProviderPrioritySource,
         auditCooldownMinutes,
         auditCooldownMinutesSource,
         envAiProvider: envProvider,
+        envAiProviderPriority: envPriority,
         envAuditCooldownMinutes: parseInt(envCooldown, 10),
         rawDbSettings: settings || null,
       },
@@ -53,6 +60,7 @@ export async function PATCH(req: Request) {
 
     const body = await req.json();
     const aiProvider = body.aiProvider;
+    const aiProviderPriority = body.aiProviderPriority;
     const auditCooldownMinutes = body.auditCooldownMinutes;
 
     // Upsert singleton row
@@ -61,12 +69,14 @@ export async function PATCH(req: Request) {
       create: {
         id: "singleton",
         aiProvider: aiProvider || null,
+        aiProviderPriority: aiProviderPriority || null,
         auditCooldownMinutes: auditCooldownMinutes !== undefined && auditCooldownMinutes !== "" && auditCooldownMinutes !== null
           ? parseInt(auditCooldownMinutes, 10)
           : null,
       },
       update: {
         aiProvider: aiProvider || null,
+        aiProviderPriority: aiProviderPriority || null,
         auditCooldownMinutes: auditCooldownMinutes !== undefined && auditCooldownMinutes !== "" && auditCooldownMinutes !== null
           ? parseInt(auditCooldownMinutes, 10)
           : null,

@@ -149,8 +149,78 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
       ].includes(item.type)
     ) || [];
 
+  const keywordOpportunities =
+    currentAudit?.items?.filter((item: any) => item.type === "keyword_opportunity") || [];
+
   return (
     <div className="space-y-8 animate-slide-up">
+      {/* Keyword Opportunities Section */}
+      {keywordOpportunities.length > 0 && (
+        <Card variant="flat" className="space-y-6">
+          <div className="pb-4 border-b border-zinc-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-md font-bold text-zinc-900 font-mono uppercase tracking-wider">Target Keyword Opportunities Discovered</h3>
+              <p className="text-xs text-zinc-550 mt-0.5">High-potential search queries to target for rank improvements and content gaps.</p>
+            </div>
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-violet-50 text-violet-600 border border-violet-100 uppercase tracking-wide">
+              {keywordOpportunities.length} opportunities
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {keywordOpportunities.map((item: any) => {
+              let parsedOpp = { keyword: "", rationale: "", intent: "", position: null, impressions: null };
+              try {
+                parsedOpp = JSON.parse(item.suggestedValue || "{}");
+              } catch (e) {}
+
+              const isVerified = item.source === "gsc_verified";
+
+              return (
+                <div
+                  key={item.id}
+                  className="p-4 rounded-xl border border-zinc-200 bg-white hover:border-zinc-300 transition-colors space-y-3 shadow-sm flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-extrabold text-zinc-800 font-mono">
+                        "{parsedOpp.keyword}"
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-650 border border-violet-100 uppercase tracking-wide font-mono shrink-0">
+                        {parsedOpp.intent}
+                      </span>
+                    </div>
+
+                    <p className="text-xs leading-relaxed text-zinc-650">
+                      {parsedOpp.rationale}
+                    </p>
+                  </div>
+
+                  <div className="pt-2.5 border-t border-zinc-100 flex items-center justify-between gap-4">
+                    {isVerified ? (
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wide flex items-center gap-1">
+                        Verified from Search Console
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-zinc-50 text-zinc-400 border border-zinc-100 uppercase tracking-wide flex items-center gap-1">
+                        AI Suggested
+                      </span>
+                    )}
+
+                    {isVerified && (parsedOpp.position !== null || parsedOpp.impressions !== null) && (
+                      <div className="text-[10px] font-mono text-zinc-500 space-x-3 shrink-0">
+                        <span>avg. pos: <strong className="text-zinc-850 font-bold">{parsedOpp.position !== null ? Number(parsedOpp.position).toFixed(1) : "--"}</strong></span>
+                        <span>impr: <strong className="text-zinc-850 font-bold">{parsedOpp.impressions || "--"}</strong></span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
         <div>
           <h2 className="text-xl font-bold text-zinc-900">AI Recommendations & Action Log</h2>

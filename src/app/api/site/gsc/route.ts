@@ -26,19 +26,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
+    if (!disconnect) {
+      return NextResponse.json(
+        { error: "Connection must be initiated through the Google OAuth flow." },
+        { status: 400 }
+      );
+    }
+
     const updatedSite = await prisma.site.update({
       where: { id: siteId },
       data: {
-        gscConnected: disconnect ? false : true,
-        gscUrl: disconnect ? null : gscUrl || site.url,
+        gscConnected: false,
+        gscUrl: null,
+        gscVerifiedPropertyUrl: null,
+        googleRefreshTokenEncrypted: null,
+        gscLastSyncedAt: null,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: disconnect
-        ? "Google Search Console disconnected successfully!"
-        : "Google Search Console connected successfully!",
+      message: "Google Search Console disconnected successfully!",
       site: {
         id: updatedSite.id,
         gscConnected: updatedSite.gscConnected,

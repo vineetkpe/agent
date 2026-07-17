@@ -9,6 +9,8 @@ import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { sanitizeHtml } from "@/lib/sanitizer";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
+import { validateSeoContent } from "@/lib/contentValidator";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -45,10 +47,31 @@ const geminiResponseSchema = {
         properties: {
           title: { type: "STRING" },
           content: { type: "STRING" },
+          metaDescription: { type: "STRING" },
+          wordCount: { type: "INTEGER" },
+          internalLinksUsed: {
+            type: "ARRAY",
+            items: { type: "STRING" }
+          },
+          externalLinksUsed: {
+            type: "ARRAY",
+            items: { type: "STRING" }
+          },
+          suggestedSchema: { type: "STRING" },
           suggestedSlug: { type: "STRING" },
           targetKeyword: { type: "STRING" },
         },
-        required: ["title", "content", "suggestedSlug", "targetKeyword"],
+        required: [
+          "title",
+          "content",
+          "metaDescription",
+          "wordCount",
+          "internalLinksUsed",
+          "externalLinksUsed",
+          "suggestedSchema",
+          "suggestedSlug",
+          "targetKeyword"
+        ],
       },
     },
   },
@@ -81,6 +104,9 @@ export async function GET(req: Request) {
           businessProfile: true,
           wpConnectedAt: true,
           detectedSeoPlugin: true,
+          uptimeMonitoringEnabled: true,
+          currentUptimeStatus: true,
+          lastUptimeCheckAt: true,
           createdAt: true,
         },
       });
@@ -99,6 +125,9 @@ export async function GET(req: Request) {
           businessProfile: true,
           wpConnectedAt: true,
           detectedSeoPlugin: true,
+          uptimeMonitoringEnabled: true,
+          currentUptimeStatus: true,
+          lastUptimeCheckAt: true,
           createdAt: true,
         },
       });
@@ -117,6 +146,9 @@ export async function GET(req: Request) {
         businessProfile: true,
         wpConnectedAt: true,
         detectedSeoPlugin: true,
+        uptimeMonitoringEnabled: true,
+        currentUptimeStatus: true,
+        lastUptimeCheckAt: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -242,12 +274,19 @@ export async function GET(req: Request) {
     // Sort by timestamp desc
     activityLog.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    const uptimeChecks = site ? await prisma.uptimeCheck.findMany({
+      where: { siteId: site.id },
+      orderBy: { checkedAt: "desc" },
+      take: 1000,
+    }) : [];
+
     return NextResponse.json({
       site,
       audit: latestAudit,
       pastAudits,
       allSites,
       activityLog,
+      uptimeChecks,
       user: {
         email: currentUser.email,
         subscriptionActive: currentUser.subscriptionActive,
@@ -273,7 +312,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { url } = await req.json();
+    const { url, targetKeyword } = await req.json();
     if (!url) {
       return NextResponse.json({ error: "Missing website URL parameter" }, { status: 400 });
     }
@@ -381,7 +420,11 @@ export async function POST(req: Request) {
     console.log(`[Audit Route] Starting audit pipeline for user ${currentUser.email} on: ${cleanUrl}`);
 
     // 3. Run crawler
-    const crawledPages = await crawlSite(cleanUrl, 10); // cap at 10 pages for speed/testing
+    const crawlResult = await crawlSite(cleanUrl, 10); // cap at 10 pages for speed/testing
+    const crawledPages = crawlResult.pages;
+    const crawlerUsed = crawlResult.crawlerUsed;
+    const crawlerWarning = crawlResult.crawlerWarning;
+
     if (crawledPages.length === 0) {
       return NextResponse.json({ error: `Could not fetch or crawl the site at ${cleanUrl}. Check if the URL is active.` }, { status: 422 });
     }
@@ -422,6 +465,32 @@ export async function POST(req: Request) {
     // 6. Run local SEO audits
     const auditResults = await runSeoAudits(crawledPages, cleanUrl);
 
+    // Fetch Google Search Console data if connected
+    let gscSnapshotData: any[] = [];
+    let gscPromptText = "";
+    if (site.gscConnected) {
+      try {
+        console.log(`[Audit Route] Fetching GSC data for verified site URL: ${site.url}`);
+        gscSnapshotData = await fetchSearchConsoleData(site);
+        gscPromptText = `
+Here is real search performance query ranking data fetched directly from Google Search Console for this site:
+${JSON.stringify(gscSnapshotData, null, 2)}
+
+INSTRUCTIONS FOR KEYWORD OPPORTUNITIES:
+1. Prioritize suggested keyword opportunities for queries that are already ranking between positions 5 and 20 (page-1-adjacent keywords that have strong potential to rank higher with content optimization).
+2. Suggest keyword opportunities for high-impression but low-CTR (click-through rate) queries, which indicate a metadata or snippet clickability problem rather than a ranking issue.
+3. Every suggestion in 'keywordOpportunities' based on this verified data MUST have its source set to 'gsc_verified' and must include its current average position and impression counts inside the suggested value.
+`;
+      } catch (gscError: any) {
+        console.error("[Audit Route] Search Console data fetch failed:", gscError);
+        throw new Error(`Google Search Console data fetch failed: ${gscError.message || gscError}`);
+      }
+    } else {
+      gscPromptText = `
+Note: Google Search Console is NOT connected. You must generate keyword opportunities based ONLY on the business profile (industry, category, services, target audience, and target region/intent). Do NOT invent generic terms. Ground all keyword suggestions in the specific business's offerings. Every suggestion generated this way will be tagged as 'ai_suggested' and is considered unverified.
+`;
+    }
+
     // 5. Create Audit database record
     const audit = await prisma.audit.create({
       data: {
@@ -430,6 +499,9 @@ export async function POST(req: Request) {
         scoreSeo: auditResults.scoreSeo,
         status: "pending",
         businessProfileError: businessProfileError,
+        gscSnapshot: site.gscConnected ? JSON.stringify(gscSnapshotData) : null,
+        crawlerUsed,
+        crawlerWarning,
       },
     });
 
@@ -453,11 +525,33 @@ Here is the Discovered Business Intelligence Profile for this company:
 - Competitors: ${parsedProfile.competitors?.join(", ") || "None listed"}
 ` : "No explicit business profile discovered yet.";
 
+      const targetKeywordRule = targetKeyword
+        ? `\nCRITICAL REQUIRED TARGET KEYWORD: You MUST write one of the blog posts targeting the primary keyword "${targetKeyword}". This keyword must be the primary focus of that blog post.\n`
+        : "";
+
       const systemPrompt = `
 You are an expert AI Website Growth Agent specializing in Local Business SEO and Content Marketing.
 We have audited the website: ${cleanUrl}.
 
 ${profileText}
+
+${gscPromptText}
+
+${targetKeywordRule}
+CRITICAL ON-PAGE SEO CONTENT RULES:
+You MUST follow these rules exactly for any blog post and meta tag suggestions:
+- title_tag: 50-60 characters, primary keyword within the first half, no clickbait/ALL CAPS.
+- meta_description: 150-160 characters, includes primary keyword naturally, ends with an implicit or explicit call-to-action, no truncation-triggering length.
+- h1: Exactly one per page, contains the primary keyword, distinct from the title tag wording (not identical duplicate).
+- heading_structure: Logical H2/H3 hierarchy, no skipped levels, each major H2 section covers a distinct subtopic/keyword variation of the primary topic.
+- word_count: Minimum 1200 words for blog posts targeting competitive local-service keywords, minimum 600 for simple informational/FAQ-style pages. Never pad with fluff to hit the count -- reject and regenerate if content is bloated filler.
+- keyword_placement: Primary keyword appears in: title, H1, first 100 words, and at least one H2. Keyword density between 0.5%-1.5% of total words -- never stuffed.
+- internal_links: Minimum 2 contextual internal links to other real pages on the same site. You MUST use only the following real crawled page URLs: ${JSON.stringify(crawledPages.map(p => p.url))}. Never invent page URLs.
+- external_links: Minimum 1 outbound link to a genuinely authoritative, topically relevant source (e.g. an industry body, .gov/.edu, or major recognized publication) to build topical trust signals. Never link to competitors or low-quality sites.
+- image_alt_text: Every suggested image slot includes descriptive alt text containing the topic naturally, never keyword-stuffed.
+- readability: Short paragraphs (3-4 sentences max), active voice preferred, at least one bulleted or numbered list where content allows it.
+- schema: Suggest Article or BlogPosting JSON-LD schema alongside the content (headline, datePublished, author) for eligible content.
+- backlinks_disclaimer: Backlinks (external sites linking TO this content) cannot be generated or guaranteed by content rules -- they depend on outside sites choosing to link. Do not claim or imply guaranteed backlink results anywhere in generated content or UI copy.
 
 Here is the summary of the crawled pages:
 ${JSON.stringify(
@@ -513,11 +607,57 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 }
 `;
 
-      aiResponse = await generateStructuredJson<{
-        keywordOpportunities: { keyword: string; rationale: string; intent: string }[];
-        fixes: { targetUrl: string; type: string; suggestedValue: string }[];
-        blogPosts: { title: string; content: string; suggestedSlug: string; targetKeyword: string }[];
-      }>(systemPrompt, geminiResponseSchema, currentUser.id);
+      let attempt = 1;
+      let validationFailuresMap: Record<number, string[]> = {};
+      let validationChecksMap: Record<number, any> = {};
+      let hasFailures = false;
+
+      while (attempt <= 2) {
+        let currentPrompt = systemPrompt;
+        if (attempt === 2) {
+          const failureText = Object.entries(validationFailuresMap)
+            .map(([idx, fails]) => `Blog Post #${Number(idx) + 1} ("${aiResponse.blogPosts[idx]?.title || "Untitled"}") failed the following SEO rules:\n${fails.map(f => `- ${f}`).join("\n")}`)
+            .join("\n\n");
+          
+          currentPrompt += `\n\n[WARNING] Your previous generation attempt failed validation:\n${failureText}\n\nPlease correct all listed errors and resubmit the complete, corrected JSON. Ensure all constraints (title length, meta length, word count, H1, internal/external links) are fully met.`;
+        }
+
+        aiResponse = await generateStructuredJson<any>(currentPrompt, geminiResponseSchema, currentUser.id);
+        
+        validationFailuresMap = {};
+        validationChecksMap = {};
+        hasFailures = false;
+
+        if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
+          for (let i = 0; i < aiResponse.blogPosts.length; i++) {
+            const post = aiResponse.blogPosts[i];
+            const opp = aiResponse.keywordOpportunities?.find(
+              (o: any) => o.keyword === post.targetKeyword
+            );
+            const intent = opp ? opp.intent : "informational";
+            
+            const validation = validateSeoContent({
+              title: post.title,
+              content: post.content,
+              metaDescription: post.metaDescription,
+              targetKeyword: post.targetKeyword,
+              intent,
+            }, cleanUrl);
+            
+            if (!validation.passed) {
+              validationFailuresMap[i] = validation.failures;
+              hasFailures = true;
+            }
+            validationChecksMap[i] = validation.checks;
+          }
+        }
+        
+        if (!hasFailures) {
+          break; // All passed
+        }
+        
+        attempt++;
+      }
 
       // Save Page/Meta/Alt/Link Fixes
       if (aiResponse.fixes && aiResponse.fixes.length > 0) {
@@ -543,8 +683,14 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 
       // Save Blog Post suggestions
       if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
-        for (const post of aiResponse.blogPosts) {
+        for (let i = 0; i < aiResponse.blogPosts.length; i++) {
+          const post = aiResponse.blogPosts[i];
           const sanitizedContent = sanitizeHtml(post.content);
+          const failures = validationFailuresMap[i] || [];
+          const warning = failures.length > 0
+            ? "This draft doesn't fully meet SEO best practices, review before publishing"
+            : null;
+
           await prisma.auditItem.create({
             data: {
               auditId: audit.id,
@@ -557,8 +703,18 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
                 content: sanitizedContent,
                 slug: post.suggestedSlug,
                 targetKeyword: post.targetKeyword,
+                metaDescription: post.metaDescription,
+                wordCount: post.wordCount,
+                internalLinksUsed: post.internalLinksUsed,
+                externalLinksUsed: post.externalLinksUsed,
+                suggestedSchema: post.suggestedSchema,
+                validation: validationChecksMap[i] ? {
+                  ...validationChecksMap[i],
+                  failures: validationFailuresMap[i] || [],
+                } : null,
               }),
               status: "pending",
+              contentQualityWarning: warning,
             },
           });
         }
@@ -567,6 +723,25 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       // Save Keyword Opportunities
       if (aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
         for (const opp of aiResponse.keywordOpportunities) {
+          const matchedGsc = site.gscConnected
+            ? gscSnapshotData.find(g => g.query.toLowerCase().trim() === opp.keyword.toLowerCase().trim())
+            : null;
+          
+          const source = matchedGsc ? "gsc_verified" : "ai_suggested";
+          
+          const suggestedValueObj: any = {
+            keyword: opp.keyword,
+            rationale: opp.rationale,
+            intent: opp.intent,
+          };
+          
+          if (matchedGsc) {
+            suggestedValueObj.position = matchedGsc.position;
+            suggestedValueObj.impressions = matchedGsc.impressions;
+            suggestedValueObj.clicks = matchedGsc.clicks;
+            suggestedValueObj.ctr = matchedGsc.ctr;
+          }
+
           await prisma.auditItem.create({
             data: {
               auditId: audit.id,
@@ -574,12 +749,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
               type: "keyword_opportunity",
               targetUrl: cleanUrl,
               currentValue: "",
-              suggestedValue: JSON.stringify({
-                keyword: opp.keyword,
-                rationale: opp.rationale,
-                intent: opp.intent,
-              }),
+              suggestedValue: JSON.stringify(suggestedValueObj),
               status: "pending",
+              source: source,
             },
           });
         }

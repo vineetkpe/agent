@@ -19,6 +19,11 @@ export async function isSafeUrlToFetch(urlStr: string): Promise<boolean> {
       return false;
     }
 
+    // Allow localhost/private IP ranges in development or when explicitly enabled
+    if (process.env.NODE_ENV !== "production" || process.env.ALLOW_LOCAL_URLS === "true") {
+      return true;
+    }
+
     const hostname = parsedUrl.hostname.toLowerCase();
 
     // Block obvious local hosts immediately

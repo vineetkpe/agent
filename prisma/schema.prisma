@@ -23,7 +23,10 @@ model User {
   onboardingCompletedAt   DateTime?
   lastNotificationCheckAt DateTime?
   createdAt               DateTime  @default(now())
+  role                    String    @default("user") // "user" | "support" | "admin"
   sites                   Site[]
+  tickets                 SupportTicket[]
+  messages                SupportTicketMessage[]
 }
 
 model Site {
@@ -37,12 +40,20 @@ model Site {
   customInstructions    String?
   gscConnected          Boolean     @default(false)
   gscUrl                String?
+  googleRefreshTokenEncrypted String?
+  gscVerifiedPropertyUrl String?
+  gscLastSyncedAt DateTime?
+  gscCachedData   String?
   businessProfile       String?     // Stored as JSON string
   detectedSeoPlugin     String?     // yoast | rankmath | none
   wpConnectedAt         DateTime?
+  uptimeMonitoringEnabled Boolean   @default(true)
+  currentUptimeStatus   String?     // "up" | "down"
+  lastUptimeCheckAt     DateTime?
   createdAt             DateTime    @default(now())
   audits                Audit[]
   auditItems            AuditItem[]
+  uptimeChecks          UptimeCheck[]
 }
 
 model Audit {
@@ -61,6 +72,9 @@ model Audit {
   aiScanError         String?
   pageSpeedScanError  String?
   businessProfileError String?
+  gscSnapshot         String?
+  crawlerUsed         String?
+  crawlerWarning      String?
   createdAt           DateTime    @default(now())
   items               AuditItem[]
 }
@@ -79,6 +93,8 @@ model AuditItem {
   appliedAt      DateTime?
   errorMessage   String?
   wpPostId       String?
+  source         String?   // "gsc_verified" | "ai_suggested"
+  contentQualityWarning String?
   updatedAt      DateTime  @default(now()) @updatedAt
   createdAt      DateTime  @default(now())
 }
@@ -88,6 +104,7 @@ model ApiUsageLog {
   provider  String   // e.g. 'gemini'/'openrouter'/'groq'
   callType  String   // 'generateContent'/'generateStructuredJson'
   success   Boolean
+  wasFailover Boolean  @default(false)
   userId    String?
   createdAt DateTime @default(now())
 }
@@ -95,6 +112,7 @@ model ApiUsageLog {
 model AppSettings {
   id                   String   @id @default("singleton")
   aiProvider           String?  // null means fallback to env default
+  aiProviderPriority   String?  // comma-separated list, e.g. 'gemini,groq'
   auditCooldownMinutes Int?     // null means fallback to env default
   updatedAt            DateTime @updatedAt
 }
@@ -115,4 +133,86 @@ model RateLimitLog {
 
   @@index([userId, routeKey, createdAt])
 }
+
+model UptimeCheck {
+  id             String    @id @default(uuid())
+  siteId         String
+  site           Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checkedAt      DateTime
+  isUp           Boolean
+  responseTimeMs Int?
+  statusCode     Int?
+  errorMessage   String?
+
+  @@index([siteId, checkedAt])
+}
+
+model AdminActionLog {
+  id           String   @id @default(uuid())
+  actorUserId  String
+  actorRole    String
+  action       String
+  targetType   String
+  targetId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+}
+
+model Plan {
+  id                 String        @id @default(uuid())
+  name               String
+  slug               String        @unique
+  monthlyPriceCents  Int
+  annualPriceCents   Int?
+  isActive           Boolean       @default(true)
+  isVisible          Boolean       @default(true)
+  sortOrder          Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  features           PlanFeature[]
+}
+
+model Feature {
+  key         String        @id
+  label       String
+  type        String        // "boolean" | "number"
+  description String
+  plans       PlanFeature[]
+}
+
+model PlanFeature {
+  id         String   @id @default(uuid())
+  planId     String
+  plan       Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureKey String
+  feature    Feature  @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+  value      Json
+
+  @@unique([planId, featureKey])
+}
+
+model SupportTicket {
+  id               String                 @id @default(uuid())
+  userId           String
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject          String
+  status           String                 @default("open") // "open" | "in_progress" | "resolved" | "closed"
+  priority         String                 @default("normal") // "low" | "normal" | "high"
+  assignedToUserId String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  messages         SupportTicketMessage[]
+}
+
+model SupportTicketMessage {
+  id             String        @id @default(uuid())
+  ticketId       String
+  ticket         SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUserId   String
+  author         User          @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  body           String
+  isInternalNote Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+}
+
 

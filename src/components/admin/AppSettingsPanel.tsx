@@ -12,15 +12,19 @@ export const AppSettingsPanel: React.FC = () => {
 
   // States
   const [aiProvider, setAiProvider] = useState("");
+  const [aiProviderPriority, setAiProviderPriority] = useState("");
   const [auditCooldownMinutes, setAuditCooldownMinutes] = useState<number | string>("");
 
   // Environment fallback variables (from server)
   const [envAiProvider, setEnvAiProvider] = useState("gemini");
+  const [envAiProviderPriority, setEnvAiProviderPriority] = useState("gemini,groq,openrouter");
   const [envAuditCooldownMinutes, setEnvAuditCooldownMinutes] = useState<number | string>(5);
 
   // Telemetry metadata
   const [effectiveProvider, setEffectiveProvider] = useState("");
   const [providerSource, setProviderSource] = useState("");
+  const [effectivePriority, setEffectivePriority] = useState("");
+  const [prioritySource, setPrioritySource] = useState("");
   const [effectiveCooldown, setEffectiveCooldown] = useState<number | null>(null);
   const [cooldownSource, setCooldownSource] = useState("");
 
@@ -52,14 +56,18 @@ export const AppSettingsPanel: React.FC = () => {
 
       setEffectiveProvider(settings.aiProvider);
       setProviderSource(settings.aiProviderSource);
+      setEffectivePriority(settings.aiProviderPriority);
+      setPrioritySource(settings.aiProviderPrioritySource);
       setEffectiveCooldown(settings.auditCooldownMinutes);
       setCooldownSource(settings.auditCooldownMinutesSource);
       setEnvAiProvider(settings.envAiProvider || "gemini");
+      setEnvAiProviderPriority(settings.envAiProviderPriority || "gemini,groq,openrouter");
       setEnvAuditCooldownMinutes(settings.envAuditCooldownMinutes !== null && settings.envAuditCooldownMinutes !== undefined ? settings.envAuditCooldownMinutes : 5);
 
       // Load DB values into fields
       const raw = settings.rawDbSettings;
       setAiProvider(raw?.aiProvider || "");
+      setAiProviderPriority(raw?.aiProviderPriority || "");
       setAuditCooldownMinutes(raw?.auditCooldownMinutes !== null && raw?.auditCooldownMinutes !== undefined ? raw.auditCooldownMinutes : "");
     } catch (err: any) {
       setError(err.message || "Failed to load settings.");
@@ -89,6 +97,7 @@ export const AppSettingsPanel: React.FC = () => {
         },
         body: JSON.stringify({
           aiProvider: aiProvider || null,
+          aiProviderPriority: aiProviderPriority || null,
           auditCooldownMinutes: auditCooldownMinutes !== "" ? parseInt(auditCooldownMinutes as string, 10) : null,
         }),
       });
@@ -181,6 +190,28 @@ export const AppSettingsPanel: React.FC = () => {
               </span>
               <Badge variant={providerSource === "database" ? "emerald" : "zinc"} className="text-[8px] px-1.5 py-0.5 uppercase font-mono">
                 {providerSource}
+              </Badge>
+            </div>
+          </div>
+
+          {/* AI Provider Priority Chain */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-mono font-bold tracking-wider text-zinc-550 uppercase block">
+              AI Fallback priority chain (comma-separated, e.g. gemini,groq)
+            </label>
+            <input
+              type="text"
+              value={aiProviderPriority}
+              onChange={(e) => setAiProviderPriority(e.target.value)}
+              placeholder={`Default (Env priority: ${envAiProviderPriority})`}
+              className="w-full px-4 py-3 rounded-xl border-2 border-zinc-955 text-sm focus:outline-none focus:border-violet-500 bg-white font-mono"
+            />
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-zinc-400 font-mono">
+                Effective value: <span className="font-bold underline text-violet-650">{effectivePriority}</span>
+              </span>
+              <Badge variant={prioritySource === "database" ? "emerald" : "zinc"} className="text-[8px] px-1.5 py-0.5 uppercase font-mono">
+                {prioritySource}
               </Badge>
             </div>
           </div>

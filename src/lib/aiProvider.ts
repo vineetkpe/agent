@@ -16,54 +16,69 @@ export function clearCachedConfig() {
   cachedConfig = null;
 }
 
-export async function getActiveProviderConfig(): Promise<{ provider: string; isMock: boolean }> {
-  const now = Date.now();
-  if (cachedConfig && (now - cachedConfig.resolvedAt) < CACHE_TTL_MS) {
-    return cachedConfig;
+export function isProviderMock(provider: string): boolean {
+  if (provider === "groq") {
+    const key = process.env.GROQ_API_KEY;
+    return !key || key === "mock-groq-key";
+  } else if (provider === "openrouter") {
+    const key = process.env.OPENROUTER_API_KEY;
+    return !key || key === "mock-openrouter-key";
+  } else {
+    const key = process.env.GEMINI_API_KEY;
+    return !key || key === "mock-gemini-key";
   }
+}
 
-  let resolvedProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
-
+export async function getProviderPriorityChain(): Promise<string[]> {
+  let resolvedPriority = "";
   try {
     const settings = await prisma.appSettings.findFirst({
       where: { id: "singleton" },
     });
-    if (settings?.aiProvider) {
-      resolvedProvider = settings.aiProvider.toLowerCase();
+    if (settings?.aiProviderPriority) {
+      resolvedPriority = settings.aiProviderPriority;
     }
   } catch (err) {
-    console.error("[AI Provider Cache] Failed to load settings from database:", err);
+    console.error("[AI Provider priority] Failed to load settings from database:", err);
   }
 
-  let resolvedIsMock = false;
-  if (resolvedProvider === "groq") {
-    const key = process.env.GROQ_API_KEY;
-    resolvedIsMock = !key || key === "mock-groq-key";
-  } else if (resolvedProvider === "openrouter") {
-    const key = process.env.OPENROUTER_API_KEY;
-    resolvedIsMock = !key || key === "mock-openrouter-key";
+  let chain: string[] = [];
+  if (resolvedPriority) {
+    chain = resolvedPriority.split(",").map(p => p.trim().toLowerCase()).filter(Boolean);
+  } else if (process.env.AI_PROVIDER_PRIORITY) {
+    chain = process.env.AI_PROVIDER_PRIORITY.split(",").map(p => p.trim().toLowerCase()).filter(Boolean);
   } else {
-    const key = process.env.GEMINI_API_KEY;
-    resolvedIsMock = !key || key === "mock-gemini-key";
+    const singleProvider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+    const defaults = ["gemini", "groq", "openrouter"];
+    chain = [singleProvider, ...defaults.filter(d => d !== singleProvider)];
   }
 
-  cachedConfig = {
-    provider: resolvedProvider,
-    isMock: resolvedIsMock,
-    resolvedAt: now,
-  };
+  // Filter chain to only include providers that have real API keys configured (i.e. not mock)
+  const filteredChain = chain.filter(provider => !isProviderMock(provider));
 
-  return cachedConfig;
+  // If no providers have real keys, fallback to the single provider choice (for mock tests)
+  if (filteredChain.length === 0) {
+    return [(process.env.AI_PROVIDER || "gemini").toLowerCase()];
+  }
+
+  return filteredChain;
 }
 
-// Async fire-and-forget logger helper
-function logApiUsage(callType: string, success: boolean, provider: string, userId?: string) {
+export async function getActiveProviderConfig(): Promise<{ provider: string; isMock: boolean }> {
+  const chain = await getProviderPriorityChain();
+  const provider = chain[0] || "gemini";
+  const isMock = isProviderMock(provider);
+  return { provider, isMock };
+}
+
+function logApiUsage(callType: string, success: boolean, provider: string, wasFailover: boolean, userId?: string) {
   prisma.apiUsageLog
     .create({
       data: {
         provider,
         callType,
         success,
+        wasFailover,
         userId: userId || null,
       },
     })
@@ -74,71 +89,94 @@ function logApiUsage(callType: string, success: boolean, provider: string, userI
 
 /**
  * Basic text generation function wrapper.
+ * Integrates priority chain failover attempts sequentially.
  */
 export async function generateContent(prompt: string, userId?: string): Promise<string> {
-  const { provider, isMock } = await getActiveProviderConfig();
+  const chain = await getProviderPriorityChain();
+  const errors: { provider: string; error: string }[] = [];
 
-  if (isMock) {
-    console.log(`[AI Provider] Using mock text generation (Provider: ${provider}).`);
-    const result = generateMockText(prompt);
-    logApiUsage("generateContent", false, provider, userId);
-    return result;
-  }
+  for (let i = 0; i < chain.length; i++) {
+    const provider = chain[i];
+    const isMock = isProviderMock(provider);
 
-  try {
-    let result = "";
-    if (provider === "groq") {
-      result = await groqProvider.generateContent(prompt);
-    } else if (provider === "openrouter") {
-      result = await openrouterProvider.generateContent(prompt);
-    } else {
-      result = await geminiProvider.generateContent(prompt);
+    if (isMock) {
+      console.log(`[AI Provider] Using mock text generation (Provider: ${provider}).`);
+      const result = generateMockText(prompt);
+      logApiUsage("generateContent", false, provider, false, userId);
+      return result;
     }
 
-    logApiUsage("generateContent", true, provider, userId);
-    return result;
-  } catch (error: any) {
-    console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateContent:`, error);
-    logApiUsage("generateContent", false, provider, userId);
-    throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
+    try {
+      let result = "";
+      if (provider === "groq") {
+        result = await groqProvider.generateContent(prompt);
+      } else if (provider === "openrouter") {
+        result = await openrouterProvider.generateContent(prompt);
+      } else {
+        result = await geminiProvider.generateContent(prompt);
+      }
+
+      const wasFailover = i > 0;
+      logApiUsage("generateContent", true, provider, wasFailover, userId);
+      return result;
+    } catch (error: any) {
+      console.warn(`[AI Fallback] ${provider} failed: ${error?.message || error}, trying next in chain...`);
+      errors.push({ provider, error: error?.message || String(error) });
+    }
   }
+
+  const errorMsg = `All AI providers failed. Tried: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`;
+  console.error(`[AI Provider] ${errorMsg}`);
+  logApiUsage("generateContent", false, chain[0] || "unknown", false, userId);
+  throw new Error(errorMsg);
 }
 
 /**
  * Structured JSON generation wrapper.
- * Uses native JSON output mode or appends schema instructions.
+ * Integrates priority chain failover attempts sequentially.
  */
 export async function generateStructuredJson<T>(
   prompt: string,
   responseSchema?: any,
   userId?: string
 ): Promise<T> {
-  const { provider, isMock } = await getActiveProviderConfig();
+  const chain = await getProviderPriorityChain();
+  const errors: { provider: string; error: string }[] = [];
 
-  if (isMock) {
-    console.log(`[AI Provider] Using mock JSON generation (Provider: ${provider}).`);
-    const result = generateMockJson<T>(prompt);
-    logApiUsage("generateStructuredJson", false, provider, userId);
-    return result;
-  }
+  for (let i = 0; i < chain.length; i++) {
+    const provider = chain[i];
+    const isMock = isProviderMock(provider);
 
-  try {
-    let result: T;
-    if (provider === "groq") {
-      result = await groqProvider.generateStructuredJson<T>(prompt, responseSchema);
-    } else if (provider === "openrouter") {
-      result = await openrouterProvider.generateStructuredJson<T>(prompt, responseSchema);
-    } else {
-      result = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
+    if (isMock) {
+      console.log(`[AI Provider] Using mock JSON generation (Provider: ${provider}).`);
+      const result = generateMockJson<T>(prompt);
+      logApiUsage("generateStructuredJson", false, provider, false, userId);
+      return result;
     }
 
-    logApiUsage("generateStructuredJson", true, provider, userId);
-    return result;
-  } catch (error: any) {
-    console.error(`[AI Provider] REAL API FAILURE for ${provider} at generateStructuredJson:`, error);
-    logApiUsage("generateStructuredJson", false, provider, userId);
-    throw new Error(`AI provider '${provider}' call failed: ${error?.message || error}`);
+    try {
+      let result: T;
+      if (provider === "groq") {
+        result = await groqProvider.generateStructuredJson<T>(prompt, responseSchema);
+      } else if (provider === "openrouter") {
+        result = await openrouterProvider.generateStructuredJson<T>(prompt, responseSchema);
+      } else {
+        result = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
+      }
+
+      const wasFailover = i > 0;
+      logApiUsage("generateStructuredJson", true, provider, wasFailover, userId);
+      return result;
+    } catch (error: any) {
+      console.warn(`[AI Fallback] ${provider} failed: ${error?.message || error}, trying next in chain...`);
+      errors.push({ provider, error: error?.message || String(error) });
+    }
   }
+
+  const errorMsg = `All AI providers failed. Tried: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`;
+  console.error(`[AI Provider] ${errorMsg}`);
+  logApiUsage("generateStructuredJson", false, chain[0] || "unknown", false, userId);
+  throw new Error(errorMsg);
 }
 
 // ==========================================
@@ -168,6 +206,11 @@ interface MockSeoFix {
 interface MockBlogPost {
   title: string;
   content: string;
+  metaDescription: string;
+  wordCount: number;
+  internalLinksUsed: string[];
+  externalLinksUsed: string[];
+  suggestedSchema: string;
   suggestedSlug: string;
   targetKeyword: string;
 }
@@ -187,7 +230,6 @@ interface MockAuditResult {
 function generateMockJson<T>(prompt: string): T {
   const lowerPrompt = prompt.toLowerCase();
   
-  // Extract target domain url from prompt to prevent example.com leak on fallback!
   let targetUrl = "https://example.com/";
   const match = prompt.match(/we audited the website:\s*(https?:\/\/[^\s]+)/i) || 
                 prompt.match(/audited\s*(https?:\/\/[^\s]+)/i);
@@ -195,7 +237,6 @@ function generateMockJson<T>(prompt: string): T {
     targetUrl = match[1].replace(/[\.,;\s]+$/, "").replace(/\/+$/, "") + "/";
   }
 
-  // Handle business profile requests
   if (lowerPrompt.includes("business profile") || lowerPrompt.includes("business intelligence")) {
     return {
       summary: `A leading hosting provider and domain registrar specialized in residential and commercial shared cloud hosting servers, offering robust DNS performance and 24/7 technical support.`,
@@ -211,9 +252,7 @@ function generateMockJson<T>(prompt: string): T {
     } as unknown as T;
   }
 
-  // Check if we are auditing a site
   if (lowerPrompt.includes("audit") || lowerPrompt.includes("issues") || lowerPrompt.includes("crawled")) {
-    // Extract Business Profile details from prompt text if available
     let summary = "";
     let category = "";
     let industry = "";
@@ -238,7 +277,6 @@ function generateMockJson<T>(prompt: string): T {
 
     const isHosting = lowerPrompt.includes("hostamble") || category.toLowerCase().includes("host") || summary.toLowerCase().includes("host");
 
-    // Dynamically build suggestions using business profile details
     let mockTitle = `Premium ${category || "Professional Solutions"} | ${capitalizedName}`;
     if (isHosting) {
       mockTitle = `Premium NVMe Web Hosting & VPS Servers | ${capitalizedName}`;
@@ -316,6 +354,13 @@ function generateMockJson<T>(prompt: string): T {
           content: isHosting 
             ? "<!-- wp:paragraph -->\n<p>Uptime and page speeds are essential ranking elements on search results. Investing in SSD server storage makes a massive difference...</p>\n<!-- /wp:paragraph -->\n<!-- wp:heading {\"level\":2} -->\n<h2>1. Switch to NVMe SSD Storage Hosting</h2>\n<!-- /wp:heading -->\n<!-- wp:paragraph -->\n<p>Older server systems use mechanical HDDs, which drag load speeds down. NVMe options retrieve files instantly...</p>\n<!-- /wp:paragraph -->"
             : `<!-- wp:paragraph -->\n<p>Choosing a reliable contractor or partner is crucial for long term success. Here are key criteria to look for...</p>\n<!-- /wp:paragraph -->`,
+          metaDescription: isHosting
+            ? "Discover how premium NVMe SSD web hosting improves page speed, boosts core web vitals, and optimizes your site for high SEO rankings today."
+            : "Learn how to choose the best professional service provider for your business. Read our expert tips, checklist requirements, and service criteria now.",
+          wordCount: 120,
+          internalLinksUsed: ["/contact", "/about"],
+          externalLinksUsed: ["https://w3.org"],
+          suggestedSchema: "{}",
           suggestedSlug: isHosting ? "hosting-speed-core-web-vitals" : "choose-best-service-provider",
           targetKeyword: kw1,
         },
@@ -326,6 +371,13 @@ function generateMockJson<T>(prompt: string): T {
           content: isHosting
             ? "<!-- wp:paragraph -->\n<p>Server exploits can destroy your reputation. Lock down your website with free SSL credentials, strong credentials, and isolated profiles...</p>\n<!-- /wp:paragraph -->"
             : "<!-- wp:paragraph -->\n<p>Regular inspections prevent costly emergency fixes down the road. Set up scheduled checkups at least twice a year...</p>\n<!-- /wp:paragraph -->",
+          metaDescription: isHosting
+            ? "Protect your cloud server from common vulnerabilities by following these five security standards, from SSL setup to access control list configuration."
+            : "Keep your systems running smoothly with this essential service and maintenance checklist. Learn why regular inspections save money and prevent issues.",
+          wordCount: 120,
+          internalLinksUsed: ["/contact", "/services"],
+          externalLinksUsed: ["https://w3.org"],
+          suggestedSchema: "{}",
           suggestedSlug: isHosting ? "protect-server-security" : "essential-maintenance-checklist",
           targetKeyword: kw2,
         },

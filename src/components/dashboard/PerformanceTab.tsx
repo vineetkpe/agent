@@ -22,6 +22,15 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
+  let gscQueries: any[] = [];
+  if (currentAudit?.gscSnapshot) {
+    try {
+      gscQueries = JSON.parse(currentAudit.gscSnapshot);
+    } catch (e) {
+      console.error("Failed to parse gscSnapshot", e);
+    }
+  }
+
   const totalAudits = sortedAudits.length;
   const current = sortedAudits[totalAudits - 1];
   const previous = totalAudits > 1 ? sortedAudits[totalAudits - 2] : null;
@@ -287,52 +296,94 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                    <th className="py-2.5 px-3">Page Path</th>
-                    <th className="py-2.5 px-3">GSC Monthly Search Clicks</th>
-                    <th className="py-2.5 px-3">Organic Visibility Score</th>
-                    <th className="py-2.5 px-3">Speed Rating</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 font-mono">
-                  {pageStats.map((stat, idx) => (
-                    <tr key={idx} className="hover:bg-zinc-50/50 transition-colors">
-                      <td className="py-3 px-3 text-zinc-800 font-bold max-w-xs truncate">
-                        {stat.url}
-                      </td>
-                      <td className="py-3 px-3 text-zinc-650 flex items-center gap-1.5">
-                        <Eye className="w-3.5 h-3.5 text-zinc-400" /> {stat.estimatedVisits.toLocaleString()} clicks
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`font-bold ${stat.pageVisibility >= 80 ? "text-emerald-600" : stat.pageVisibility >= 50 ? "text-amber-600" : "text-red-655"}`}>
-                          {stat.pageVisibility}%
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wide ${
-                            stat.speedRating === "Good"
-                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                              : stat.speedRating === "Needs Improvement"
-                              ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                              : "bg-red-500/10 text-red-655 border-red-500/20"
-                          }`}
-                        >
-                          {stat.speedRating} ({stat.speedScore})
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <span className="text-[10px] text-zinc-450 italic">
-                          live index synced
-                        </span>
-                      </td>
+              {gscQueries.length > 0 ? (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                      <th className="py-2.5 px-3">Search Query</th>
+                      <th className="py-2.5 px-3">Target Page</th>
+                      <th className="py-2.5 px-3">Clicks</th>
+                      <th className="py-2.5 px-3">Impressions</th>
+                      <th className="py-2.5 px-3">CTR</th>
+                      <th className="py-2.5 px-3 text-right">Avg. Position</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 font-mono">
+                    {gscQueries.map((item: any, idx: number) => {
+                      const cleanPage = item.page ? item.page.replace(currentSite?.url || "", "") || "/" : "/";
+                      return (
+                        <tr key={idx} className="hover:bg-zinc-50/50 transition-colors">
+                          <td className="py-3 px-3 text-zinc-800 font-bold">
+                            "{item.query}"
+                          </td>
+                          <td className="py-3 px-3 text-zinc-500 truncate max-w-xs" title={item.page}>
+                            {cleanPage}
+                          </td>
+                          <td className="py-3 px-3 text-zinc-650 font-bold">
+                            {item.clicks.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3 text-zinc-650">
+                            {item.impressions.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3 text-zinc-650">
+                            {(item.ctr * 100).toFixed(1)}%
+                          </td>
+                          <td className="py-3 px-3 text-right font-bold text-violet-650">
+                            {Number(item.position).toFixed(1)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-200 text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                      <th className="py-2.5 px-3">Page Path</th>
+                      <th className="py-2.5 px-3">GSC Monthly Search Clicks</th>
+                      <th className="py-2.5 px-3">Organic Visibility Score</th>
+                      <th className="py-2.5 px-3">Speed Rating</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 font-mono">
+                    {pageStats.map((stat, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-50/50 transition-colors">
+                        <td className="py-3 px-3 text-zinc-800 font-bold max-w-xs truncate">
+                          {stat.url}
+                        </td>
+                        <td className="py-3 px-3 text-zinc-650 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-zinc-400" /> {stat.estimatedVisits.toLocaleString()} clicks
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`font-bold ${stat.pageVisibility >= 80 ? "text-emerald-600" : stat.pageVisibility >= 50 ? "text-amber-600" : "text-red-655"}`}>
+                            {stat.pageVisibility}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wide ${
+                              stat.speedRating === "Good"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                : stat.speedRating === "Needs Improvement"
+                                ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                                : "bg-red-500/10 text-red-655 border-red-500/20"
+                            }`}
+                          >
+                            {stat.speedRating} ({stat.speedScore})
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="text-[10px] text-zinc-450 italic">
+                            live index synced
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </Card>
         </div>

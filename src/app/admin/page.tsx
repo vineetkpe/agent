@@ -13,6 +13,8 @@ import ActivityFeed from "@/components/admin/ActivityFeed";
 import { AppSettingsPanel } from "@/components/admin/AppSettingsPanel";
 import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
 import { SiteManagementPanel } from "@/components/admin/SiteManagementPanel";
+import { PlanManagementPanel } from "@/components/admin/PlanManagementPanel";
+import { SupportQueuePanel } from "@/components/admin/SupportQueuePanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -20,7 +22,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans" | "support">("overview");
 
   const fetchStats = async () => {
     try {
@@ -52,6 +54,9 @@ export default function AdminPage() {
       const data = await res.json();
       setStats(data);
       setIsAuthorized(true);
+      if (data.currentUser?.role === "support") {
+        setActiveTab("support");
+      }
     } catch (err: any) {
       console.error("[Admin Stats Loading Error]:", err);
       setError(err.message || "Failed to load telemetry stats.");
@@ -157,43 +162,77 @@ export default function AdminPage() {
 
       {/* Navigation tabs */}
       <div className="max-w-7xl mx-auto flex border-b border-zinc-200 font-mono text-xs font-bold uppercase">
+        {stats?.currentUser?.role === "admin" && (
+          <>
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] transition-colors ${
+                activeTab === "overview" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab("users")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "users" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Users
+            </button>
+            <button
+              onClick={() => setActiveTab("sites")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "sites" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Sites
+            </button>
+            <button
+              onClick={() => setActiveTab("plans")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "plans" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Plans
+            </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "settings" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Settings
+            </button>
+          </>
+        )}
         <button
-          onClick={() => setActiveTab("overview")}
-          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] transition-colors ${
-            activeTab === "overview" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+          onClick={() => setActiveTab("support")}
+          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ${stats?.currentUser?.role === "admin" ? "ml-2" : ""} transition-colors ${
+            activeTab === "support" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
           }`}
         >
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
-            activeTab === "users" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
-          }`}
-        >
-          Users
-        </button>
-        <button
-          onClick={() => setActiveTab("sites")}
-          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
-            activeTab === "sites" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
-          }`}
-        >
-          Sites
-        </button>
-        <button
-          onClick={() => setActiveTab("settings")}
-          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
-            activeTab === "settings" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
-          }`}
-        >
-          Settings
+          Support Queue
         </button>
       </div>
 
       <div className="max-w-7xl mx-auto">
         {activeTab === "overview" && (
           <div className="space-y-8 animate-fade-in">
+            {stats?.failoverCallsLast24h > 0 && (
+              <div className="p-4 rounded-xl border-2 border-amber-955 bg-amber-55 text-xs text-amber-755 flex items-start gap-2.5 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-[9px] font-mono text-amber-800">
+                    System Telemetry Notice: AI Provider Failover Triggered
+                  </p>
+                  <p className="mt-0.5 font-mono">
+                    We detected <strong>{stats.failoverCallsLast24h}</strong> incident(s) in the last 24 hours where the primary AI provider failed and automatic failover was triggered. Check provider keys and rate limits.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* KPI indicators */}
             <KpiCards stats={stats} />
 
@@ -226,6 +265,18 @@ export default function AdminPage() {
         {activeTab === "settings" && (
           <div className="animate-fade-in">
             <AppSettingsPanel />
+          </div>
+        )}
+
+        {activeTab === "plans" && stats?.currentUser?.role === "admin" && (
+          <div className="animate-fade-in">
+            <PlanManagementPanel />
+          </div>
+        )}
+
+        {activeTab === "support" && (
+          <div className="animate-fade-in">
+            <SupportQueuePanel />
           </div>
         )}
       </div>

@@ -19,15 +19,33 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
  */
 export async function getOrCreateDefaultUser() {
   try {
-    let user = await prisma.user.findFirst();
+    let user = await prisma.user.findFirst({
+      where: { email: "vineetkpe@gmail.com" }
+    });
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email: "user@example.com",
-          subscriptionActive: true, // Make active for full dashboard testing
-        },
-      });
-      console.log(`[User Service] [DEV-ONLY] Created default user: ${user.email}`);
+      // Check if any other default user exists to migrate, otherwise create fresh
+      const fallback = await prisma.user.findFirst();
+      if (fallback) {
+        user = await prisma.user.update({
+          where: { id: fallback.id },
+          data: {
+            email: "vineetkpe@gmail.com",
+            role: "admin",
+            isAdmin: true
+          }
+        });
+        console.log(`[User Service] [DEV-ONLY] Migrated local user account to admin: ${user.email}`);
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email: "vineetkpe@gmail.com",
+            subscriptionActive: true,
+            role: "admin",
+            isAdmin: true
+          },
+        });
+        console.log(`[User Service] [DEV-ONLY] Created default admin user: ${user.email}`);
+      }
     }
     return user;
   } catch (error) {
@@ -59,16 +77,18 @@ export async function getCurrentUser(req: Request) {
           where: { id: payload.adminUserId },
         });
 
-        if (targetUser && adminUser && adminUser.isAdmin) {
+        if (targetUser && adminUser && adminUser.role === "admin") {
           console.log(`[Auth] Impersonation Session: Admin ${adminUser.email} is viewing ${targetUser.email}`);
           if (targetUser.suspended) {
             console.warn(`[Auth] Impersonation failed: Target user ${targetUser.email} is suspended.`);
             return null;
           }
-          return {
+          const mappedTarget = {
             ...targetUser,
             __impersonatedBy: adminUser.id,
           };
+          mappedTarget.isAdmin = mappedTarget.role === "admin";
+          return mappedTarget;
         }
       }
     } catch (impersonateErr) {
@@ -92,6 +112,10 @@ export async function getCurrentUser(req: Request) {
       if (devUser && devUser.suspended) {
         console.warn(`[Auth] Dev user ${devUser.email} is suspended.`);
         return null;
+      }
+      if (devUser) {
+        devUser.role = "admin";
+        devUser.isAdmin = true;
       }
       return devUser;
     }
@@ -145,10 +169,10 @@ export async function getCurrentUser(req: Request) {
     const adminEmailsEnv = process.env.ADMIN_EMAILS || "";
     const adminEmails = adminEmailsEnv.split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
     if (dbUser.email && adminEmails.includes(dbUser.email.toLowerCase())) {
-      if (!dbUser.isAdmin) {
+      if (!dbUser.isAdmin || dbUser.role !== "admin") {
         dbUser = await prisma.user.update({
           where: { id: dbUser.id },
-          data: { isAdmin: true }
+          data: { isAdmin: true, role: "admin" }
         });
         console.log(`[Auth] Granted admin access to: ${dbUser.email}`);
       }
@@ -159,6 +183,7 @@ export async function getCurrentUser(req: Request) {
       return null;
     }
 
+    dbUser.isAdmin = dbUser.role === "admin";
     return dbUser;
   } catch (err) {
     console.error("[Auth] Error fetching current user session:", err);

@@ -14,11 +14,52 @@ export interface CrawledPage {
   visibleText?: string;
 }
 
-export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawledPage[]> {
+export interface CrawlResult {
+  pages: CrawledPage[];
+  crawlerUsed: "cheerio" | "firecrawl";
+  crawlerWarning?: string;
+}
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+export function isThinContent(pages: CrawledPage[]): boolean {
+  if (pages.length === 0) return true;
+
+  let totalWords = 0;
+  let hasRootDivOnly = false;
+
+  for (const page of pages) {
+    const words = countWords(page.visibleText || "");
+    totalWords += words;
+
+    const bodyMatch = page.rawHtml?.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) {
+      const bodyContent = bodyMatch[1].replace(/<!--[\s\S]*?-->/g, "").trim();
+      const cleanBody = bodyContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "").replace(/\s+/g, "").trim();
+      if (
+        cleanBody === '<divid="root"></div>' ||
+        cleanBody === '<divid="app"></div>' ||
+        cleanBody === '<divid="root"/>' ||
+        cleanBody === '<divid="app"/>' ||
+        cleanBody === ""
+      ) {
+        hasRootDivOnly = true;
+      }
+    }
+  }
+
+  const avgWords = totalWords / pages.length;
+  console.log(`[Crawler Quality] Checked crawl quality: average words = ${avgWords}, SPA marker = ${hasRootDivOnly}`);
+
+  return avgWords < 150 || hasRootDivOnly;
+}
+
+export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlResult> {
   const crawled: Map<string, CrawledPage> = new Map();
   const queue: string[] = [];
   
-  // Normalize and validate starting URL
   let parsedStartUrl: URL;
   try {
     parsedStartUrl = new URL(startUrl);
@@ -29,18 +70,15 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
   const origin = parsedStartUrl.origin;
   const hostname = parsedStartUrl.hostname;
   
-  // Verify safety of seed URL
   if (!(await isSafeUrlToFetch(parsedStartUrl.toString()))) {
     console.log(`[Crawler] Skipping unsafe start URL: ${parsedStartUrl.toString()}`);
-    return [];
+    return { pages: [], crawlerUsed: "cheerio" };
   }
   
   queue.push(parsedStartUrl.toString());
 
   while (queue.length > 0 && crawled.size < maxPages) {
     const currentUrl = queue.shift()!;
-    
-    // Normalize URL for deduplication (strip hash)
     const normalizedUrl = new URL(currentUrl);
     normalizedUrl.hash = "";
     const cleanUrlStr = normalizedUrl.toString();
@@ -49,7 +87,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
       continue;
     }
 
-    // SSRF Check
     if (!(await isSafeUrlToFetch(cleanUrlStr))) {
       console.log(`[Crawler] Skipping unsafe URL during crawl loop: ${cleanUrlStr}`);
       continue;
@@ -61,7 +98,7 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         headers: {
           "User-Agent": "AI-Website-Growth-Agent/1.0 (SEO Audit)",
         },
-        signal: AbortSignal.timeout(8000), // 8s timeout
+        signal: AbortSignal.timeout(8000),
       });
 
       const contentType = response.headers.get("content-type") || "";
@@ -73,11 +110,9 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
       const html = await response.text();
       const $ = cheerio.load(html);
 
-      // Extract SEO tags
       const title = $("title").text().trim() || "";
       const metaDescription = $('meta[name="description"]').attr("content")?.trim() || "";
 
-      // Extract headings
       const headings: { level: string; text: string }[] = [];
       $("h1, h2, h3, h4, h5, h6").each((_, el) => {
         headings.push({
@@ -86,7 +121,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         });
       });
 
-      // Extract images
       const images: { src: string; alt: string }[] = [];
       $("img").each((_, el) => {
         const src = $(el).attr("src") || "";
@@ -96,7 +130,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         }
       });
 
-      // Extract JSON-LD schema
       const schemas: string[] = [];
       $('script[type="application/ld+json"]').each((_, el) => {
         const text = $(el).html()?.trim();
@@ -105,7 +138,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
         }
       });
 
-      // Extract links
       const internalLinksSet: Set<string> = new Set();
       const externalLinksSet: Set<string> = new Set();
 
@@ -117,17 +149,12 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
 
         try {
           const absoluteUrl = new URL(href, cleanUrlStr);
-          
-          // Check if internal
           if (absoluteUrl.hostname === hostname) {
-            // Strip hash
             absoluteUrl.hash = "";
             const absStr = absoluteUrl.toString();
             internalLinksSet.add(absStr);
             
-            // Queue if not already crawled
             if (!crawled.has(absStr) && !queue.includes(absStr)) {
-              // Exclude static assets
               const pathname = absoluteUrl.pathname.toLowerCase();
               const isAsset = pathname.endsWith(".png") || pathname.endsWith(".jpg") || 
                               pathname.endsWith(".jpeg") || pathname.endsWith(".gif") || 
@@ -135,7 +162,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
                               pathname.endsWith(".css") || pathname.endsWith(".js") ||
                               pathname.endsWith(".xml");
               
-              // Bounded queue size check
               if (!isAsset && queue.length < maxPages * 10) {
                 queue.push(absStr);
               }
@@ -143,12 +169,9 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
           } else {
             externalLinksSet.add(absoluteUrl.toString());
           }
-        } catch {
-          // Invalid href format, skip
-        }
+        } catch {}
       });
 
-      // Extract visible text (remove scripts, style, frames, svg etc.)
       const textClone = cheerio.load(html);
       textClone("script, style, iframe, noscript, svg").remove();
       const visibleText = textClone("body").text().replace(/\s+/g, " ").trim().slice(0, 1200);
@@ -171,5 +194,40 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<Crawle
     }
   }
 
-  return Array.from(crawled.values());
+  const cheerioPages = Array.from(crawled.values());
+
+  if (isThinContent(cheerioPages)) {
+    const firecrawlApiKey = process.env.FIRECRAWL_API_KEY;
+    if (firecrawlApiKey && firecrawlApiKey !== "mock-firecrawl-key") {
+      console.log(`[Crawler] Thin content detected (${cheerioPages.length} pages). Retrying with Firecrawl JS rendering...`);
+      try {
+        const { crawlWithFirecrawl, parseFirecrawlPage } = await import("./firecrawlProvider");
+        const firecrawlPages = await crawlWithFirecrawl(startUrl, maxPages);
+        const parsedPages = firecrawlPages.map(p => parseFirecrawlPage(p));
+        return {
+          pages: parsedPages,
+          crawlerUsed: "firecrawl"
+        };
+      } catch (err: any) {
+        console.error(`[Crawler] Firecrawl fallback failed: ${err.message || err}`);
+        return {
+          pages: cheerioPages,
+          crawlerUsed: "cheerio",
+          crawlerWarning: "This site may use JavaScript rendering. Fallback retry failed: " + (err.message || String(err))
+        };
+      }
+    } else {
+      console.log(`[Crawler] Thin content detected, but FIRECRAWL_API_KEY is not set. Skipping fallback.`);
+      return {
+        pages: cheerioPages,
+        crawlerUsed: "cheerio",
+        crawlerWarning: "This site may use JavaScript rendering that our scanner can't fully read yet -- results may be incomplete."
+      };
+    }
+  }
+
+  return {
+    pages: cheerioPages,
+    crawlerUsed: "cheerio"
+  };
 }

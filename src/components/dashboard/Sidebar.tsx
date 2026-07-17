@@ -1,10 +1,10 @@
-import React from "react";
-import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2 } from "lucide-react";
+import React, { useState } from "react";
+import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2, ChevronUp, Search, MessageSquare } from "lucide-react";
 import { TabType } from "@/hooks/useDashboardData";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BillingUpgradeBanner } from "./BillingUpgradeBanner";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
 
 interface SidebarProps {
   activeTab: TabType;
@@ -32,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentAudit = null,
 }) => {
   const router = useRouter();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -52,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "crawler", label: "Site Crawler (Core)", icon: <Globe className="w-4 h-4" /> },
         { id: "recommendations", label: "AI Recommendations", icon: <HeartPulse className="w-4 h-4" />, hasBadge: true },
         { id: "content", label: "AI Content Suite", icon: <FileText className="w-4 h-4" /> },
+        { id: "keywords", label: "Keyword Research", icon: <Search className="w-4 h-4" /> },
       ],
     },
     {
@@ -60,6 +62,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "sites", label: "My Audited Sites", icon: <Layers className="w-4 h-4" /> },
         { id: "context", label: "AI Agent Context", icon: <Database className="w-4 h-4" /> },
         { id: "connections", label: "Connections", icon: <Settings className="w-4 h-4" /> },
+      ],
+    },
+    {
+      title: "Help & Support",
+      items: [
+        { id: "support", label: "Customer Support", icon: <MessageSquare className="w-4 h-4" /> },
       ],
     },
   ];
@@ -81,14 +89,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         `}
       >
         <div className="h-16 px-6 flex items-center justify-between border-b gap-3 border-zinc-100">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold tracking-tight text-zinc-900">
               HeyDrona Growth
             </span>
-          </div>
+          </Link>
           <button
             onClick={() => setIsSidebarOpen(false)}
             className="p-1 rounded-xl md:hidden hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
@@ -149,36 +157,102 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </nav>
 
-        {/* Pricing / Status Upgrade */}
-        <BillingUpgradeBanner
-          currentUser={currentUser}
-          handleSubscribe={handleSubscribe}
-          isSubscribing={isSubscribing}
-          allSites={allSites}
-          currentSite={currentSite}
-          currentAudit={currentAudit}
-        />
-
-
-        {/* User profile & Logout */}
-        <div className="p-4 border-t border-zinc-200">
-          <div className="p-3 border rounded-xl flex flex-col gap-2 bg-zinc-50 border-zinc-200 shadow-sm">
-            <div className="flex flex-col truncate">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
-                Logged In As
-              </span>
-              <span className="text-xs font-semibold text-zinc-700 truncate font-mono mt-0.5">
-                {currentUser?.email || "loading..."}
-              </span>
+        {/* User profile & Menu Trigger */}
+        <div className="p-4 border-t border-zinc-200 relative">
+          <button
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            type="button"
+            className="w-full p-2.5 border rounded-xl flex items-center justify-between bg-zinc-50 border-zinc-200 hover:bg-zinc-100 transition-colors shadow-sm text-left font-mono"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                {currentUser?.email ? currentUser.email.charAt(0).toUpperCase() : "?"}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-bold text-zinc-700 truncate">
+                  {currentUser?.email || "User Profile"}
+                </span>
+                <span className="text-[9px] text-zinc-450 font-bold uppercase tracking-wider">
+                  {(() => {
+                    const limits = getEffectivePlanLimits(currentUser);
+                    return currentUser?.plan 
+                      ? currentUser.plan.charAt(0).toUpperCase() + currentUser.plan.slice(1) 
+                      : currentUser?.subscriptionActive ? "Premium" : "Free";
+                  })()} Plan
+                </span>
+              </div>
             </div>
-            <button
-              onClick={handleLogout}
-              type="button"
-              className="w-full py-2 border rounded-lg text-xs font-bold transition-all bg-white border-zinc-300 text-zinc-650 hover:bg-zinc-100 flex items-center justify-center gap-1.5"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign Out
-            </button>
-          </div>
+            <ChevronUp className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="absolute bottom-16 left-4 right-4 border-2 border-zinc-950 bg-white rounded-2xl shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] z-50 animate-scale-up py-1.5 flex flex-col divide-y divide-zinc-150 font-mono">
+              <div className="px-3.5 py-2 flex flex-col gap-0.5 text-[9px] font-bold text-zinc-450 uppercase tracking-widest">
+                <span>Account Status</span>
+                <span className="text-violet-650 font-mono text-[10px] lowercase normal-case tracking-normal truncate">
+                  {currentUser?.email}
+                </span>
+              </div>
+
+              <div className="flex flex-col p-1.5 gap-1">
+                {(!currentUser?.subscriptionActive || (() => {
+                  const limits = getEffectivePlanLimits(currentUser);
+                  return limits.maxSites !== Infinity && limits.maxSites < 10;
+                })()) && (
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      handleSubscribe();
+                    }}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-violet-650 hover:bg-violet-50 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    🚀 Upgrade Plan
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    selectTab("settings");
+                  }}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  ⚙️ Settings Page
+                </button>
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    selectTab("context");
+                  }}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  👤 Personalise Agent
+                </button>
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    alert("Support Desk: email support@heydrona.com for quick assistance!");
+                  }}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  ❓ Help & Support
+                </button>
+              </div>
+
+              <div className="p-1.5">
+                <button
+                  onClick={handleLogout}
+                  type="button"
+                  className="w-full py-1.5 border rounded-lg text-[11px] font-bold transition-all bg-white border-zinc-300 text-zinc-650 hover:bg-zinc-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
     </>

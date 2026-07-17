@@ -85,7 +85,14 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <Button variant="secondary" onClick={() => setPreviewBlogPost(post)} className="flex-1">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setPreviewBlogPost({
+                        ...post,
+                        contentQualityWarning: item.contentQualityWarning
+                      })}
+                      className="flex-1"
+                    >
                       Preview Content
                     </Button>
                     {item.status === "pending" && (
@@ -146,6 +153,56 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                 ✕
               </button>
             </div>
+
+            {/* Warning Banner */}
+            {previewBlogPost.contentQualityWarning && (
+              <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-amber-800 text-xs flex flex-col gap-1.5 animate-fade-in">
+                <span className="font-bold flex items-center gap-1.5">
+                  ⚠️ This draft doesn't fully meet SEO best practices, review before publishing
+                </span>
+                {previewBlogPost.validation?.failures && previewBlogPost.validation.failures.length > 0 ? (
+                  <ul className="list-disc pl-5 space-y-0.5 text-[10px] text-amber-700 font-mono">
+                    {previewBlogPost.validation.failures.map((fail: string, idx: number) => (
+                      <li key={idx}>{fail}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-[10px] text-amber-700 font-mono">
+                    Reason: The post failed automated on-page checks. Review layout before publication.
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Checklist */}
+            {previewBlogPost.validation && (
+              <div className="px-6 py-2.5 bg-zinc-50 border-b border-zinc-150 flex flex-wrap gap-x-6 gap-y-1.5 text-[11px] font-mono">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500">Title Length:</span>
+                  <span className={previewBlogPost.validation.titleLengthPassed ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                    {previewBlogPost.validation.titleLengthPassed ? "✓ Passed" : "✗ Failed (50-60 chars)"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500">Meta Length:</span>
+                  <span className={previewBlogPost.validation.metaLengthPassed ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                    {previewBlogPost.validation.metaLengthPassed ? "✓ Passed" : "✗ Failed (150-160 chars)"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500">Word Count:</span>
+                  <span className={previewBlogPost.validation.wordCountPassed ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                    {previewBlogPost.validation.wordCountPassed ? "✓ Passed" : "✗ Failed"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500">Internal Links:</span>
+                  <span className={previewBlogPost.validation.internalLinksPassed ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                    {previewBlogPost.validation.internalLinksPassed ? "✓ Passed (min 2)" : "✗ Failed (min 2)"}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto space-y-4 prose max-w-none text-xs leading-relaxed text-zinc-850">

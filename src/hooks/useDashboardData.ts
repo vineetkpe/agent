@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance";
+export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance" | "settings" | "notifications" | "keywords" | "support";
 
 export function useDashboardData() {
   const [siteUrl, setSiteUrl] = useState("");
@@ -36,6 +36,8 @@ export function useDashboardData() {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [previewBlogPost, setPreviewBlogPost] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [prefilledKeyword, setPrefilledKeyword] = useState<string>("");
+  const [uptimeChecks, setUptimeChecks] = useState<any[]>([]);
 
   const selectTab = (tab: TabType) => {
     setActiveTab(tab);
@@ -107,6 +109,7 @@ export function useDashboardData() {
         if (data.user) {
           setCurrentUser(data.user);
         }
+        setUptimeChecks(data.uptimeChecks || []);
       }
     } catch (err) {
       console.error("Failed to load initial data", err);
@@ -177,7 +180,7 @@ export function useDashboardData() {
       const res = await fetch("/api/audit", {
         method: "POST",
         headers,
-        body: JSON.stringify({ url: siteUrl }),
+        body: JSON.stringify({ url: siteUrl, targetKeyword: prefilledKeyword }),
       });
 
       clearInterval(interval);
@@ -340,31 +343,51 @@ export function useDashboardData() {
 
   const toggleGscConnection = async (siteId: string, gscUrl?: string, disconnect?: boolean) => {
     try {
-      const headers = await getHeaders();
-      const res = await fetch("/api/site/gsc", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ siteId, gscUrl, disconnect }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        // Update states locally
-        if (currentSite && currentSite.id === siteId) {
-          setCurrentSite((prev: any) => ({
-            ...prev,
-            gscConnected: data.site.gscConnected,
-            gscUrl: data.site.gscUrl,
-          }));
+      if (disconnect) {
+        const headers = await getHeaders();
+        const res = await fetch("/api/site/gsc", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ siteId, disconnect }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // Update states locally
+          if (currentSite && currentSite.id === siteId) {
+            setCurrentSite((prev: any) => ({
+              ...prev,
+              gscConnected: false,
+              gscUrl: null,
+            }));
+          }
+          setAllSites((prev: any[]) =>
+            prev.map((s) =>
+              s.id === siteId
+                ? { ...s, gscConnected: false, gscUrl: null }
+                : s
+            )
+          );
+          alert("Google Search Console disconnected successfully!");
+        } else {
+          alert(data.error || "Failed to disconnect Search Console.");
         }
-        setAllSites((prev: any[]) =>
-          prev.map((s) =>
-            s.id === siteId
-              ? { ...s, gscConnected: data.site.gscConnected, gscUrl: data.site.gscUrl }
-              : s
-          )
-        );
       } else {
-        alert(data.error || "Failed to toggle Search Console connection.");
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || "";
+        const impToken = typeof window !== "undefined" ? localStorage.getItem("impersonation_token") || "" : "";
+        
+        let connectUrl = `/api/auth/google/connect?siteId=${encodeURIComponent(siteId)}`;
+        if (token) {
+          connectUrl += `&token=${encodeURIComponent(token)}`;
+        }
+        if (impToken) {
+          connectUrl += `&impersonation_token=${encodeURIComponent(impToken)}`;
+        }
+        if (gscUrl) {
+          connectUrl += `&gscUrl=${encodeURIComponent(gscUrl)}`;
+        }
+        // Redirect browser to trigger Google OAuth flow
+        window.location.href = connectUrl;
       }
     } catch (err) {
       console.error("GSC connection failed", err);
@@ -403,6 +426,21 @@ export function useDashboardData() {
       const params = new URLSearchParams(window.location.search);
       if (params.get("payment") === "success" || params.get("mock_payment") === "success") {
         setBillingMessage("🎉 Subscription activated successfully! Welcome to Premium!");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      const tab = params.get("tab");
+      if (tab === "connections") {
+        setActiveTab("connections");
+      }
+
+      const successMsg = params.get("success");
+      const errorMsg = params.get("error");
+      if (successMsg) {
+        alert(successMsg);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (errorMsg) {
+        alert(errorMsg);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
@@ -461,5 +499,9 @@ export function useDashboardData() {
     deleteSite,
     toggleGscConnection,
     addSite,
+    prefilledKeyword,
+    setPrefilledKeyword,
+    uptimeChecks,
+    setUptimeChecks,
   };
 }

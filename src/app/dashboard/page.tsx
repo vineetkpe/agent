@@ -10,13 +10,17 @@ import { CrawlerTab } from "@/components/dashboard/CrawlerTab";
 import { RecommendationsTab } from "@/components/dashboard/RecommendationsTab";
 import { ContentTab } from "@/components/dashboard/ContentTab";
 import { ConnectionsTab } from "@/components/dashboard/ConnectionsTab";
+import { KeywordResearchTab } from "@/components/dashboard/KeywordResearchTab";
 import { Chatbot } from "@/components/dashboard/Chatbot";
 import { SitesTab } from "@/components/dashboard/SitesTab";
 import { AIContextTab } from "@/components/dashboard/AIContextTab";
 import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
+import { SettingsTab } from "@/components/dashboard/SettingsTab";
+import { NotificationsTab } from "@/components/dashboard/NotificationsTab";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { SupportTab } from "@/components/dashboard/SupportTab";
 import { ChevronRight, Menu } from "lucide-react";
 
 export default function DashboardPage() {
@@ -77,18 +81,40 @@ export default function DashboardPage() {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setIsAuthenticated(false);
-        router.push("/login");
-      } else {
-        setIsAuthenticated(true);
+        // 300ms grace check for transient SDK race
+        await new Promise((r) => setTimeout(r, 300));
+        const retry = await supabase.auth.getSession();
+        if (!retry.data.session) {
+          setIsAuthenticated(false);
+          router.push("/login");
+          return;
+        }
       }
+      setIsAuthenticated(true);
     };
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Ignore INITIAL_SESSION event entirely for redirect purposes
+      if (event === "INITIAL_SESSION") {
+        if (session) setIsAuthenticated(true);
+        return;
+      }
+
+      if (event === "SIGNED_OUT") {
         setIsAuthenticated(false);
         router.push("/login");
+        return;
+      }
+
+      if (!session) {
+        // If event is not SIGNED_OUT, but session is null, do a grace check before redirecting
+        await new Promise((r) => setTimeout(r, 300));
+        const retry = await supabase.auth.getSession();
+        if (!retry.data.session) {
+          setIsAuthenticated(false);
+          router.push("/login");
+        }
       } else {
         setIsAuthenticated(true);
       }
@@ -228,6 +254,9 @@ export default function DashboardPage() {
                 selectTab={data.selectTab}
                 pastAudits={data.pastAudits}
                 activityLog={data.activityLog}
+                uptimeChecks={data.uptimeChecks}
+                currentUser={data.currentUser}
+                onRefresh={() => data.fetchInitialData(data.currentSite?.id)}
               />
             </div>
           )}
@@ -247,6 +276,8 @@ export default function DashboardPage() {
               pageSpeedScanStatus={data.pageSpeedScanStatus}
               aiScanError={data.aiScanError}
               pageSpeedScanError={data.pageSpeedScanError}
+              prefilledKeyword={data.prefilledKeyword}
+              setPrefilledKeyword={data.setPrefilledKeyword}
             />
           )}
 
@@ -289,6 +320,14 @@ export default function DashboardPage() {
             />
           )}
 
+          {data.activeTab === "keywords" && (
+            <KeywordResearchTab
+              currentSite={data.currentSite}
+              selectTab={data.selectTab}
+              setPrefilledKeyword={data.setPrefilledKeyword}
+            />
+          )}
+
           {data.activeTab === "sites" && (
             <SitesTab
               allSites={data.allSites}
@@ -321,6 +360,25 @@ export default function DashboardPage() {
               currentSite={data.currentSite}
               selectTab={data.selectTab}
             />
+          )}
+
+          {data.activeTab === "settings" && (
+            <SettingsTab
+              currentUser={data.currentUser}
+              currentSite={data.currentSite}
+              allSites={data.allSites}
+              selectTab={data.selectTab}
+              handleSubscribe={data.handleSubscribe}
+              isSubscribing={data.isSubscribing}
+            />
+          )}
+
+          {data.activeTab === "notifications" && (
+            <NotificationsTab selectTab={data.selectTab} />
+          )}
+
+          {data.activeTab === "support" && (
+            <SupportTab />
           )}
         </div>
       </main>

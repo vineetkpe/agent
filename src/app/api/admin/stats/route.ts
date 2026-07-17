@@ -5,8 +5,8 @@ import { getCurrentUser } from "@/lib/user";
 export async function GET(req: Request) {
   try {
     const currentUser = await getCurrentUser(req);
-    if (!currentUser || !currentUser.isAdmin) {
-      return NextResponse.json({ error: "Forbidden: Admin access required." }, { status: 403 });
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "support")) {
+      return NextResponse.json({ error: "Forbidden: Admin or Support access required." }, { status: 403 });
     }
 
     // 1. Basic Stats
@@ -232,6 +232,17 @@ export async function GET(req: Request) {
       };
     });
 
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    const failoverCallsLast24h = await prisma.apiUsageLog.count({
+      where: {
+        wasFailover: true,
+        createdAt: {
+          gte: oneDayAgo,
+        },
+      },
+    });
+
     return NextResponse.json({
       totalUsers,
       activeSubscriptions,
@@ -245,6 +256,12 @@ export async function GET(req: Request) {
       apiUsageLast30Days,
       recentActivity,
       usersList,
+      failoverCallsLast24h,
+      currentUser: {
+        id: currentUser.id,
+        email: currentUser.email,
+        role: currentUser.role,
+      },
     });
   } catch (error: any) {
     console.error("[Admin Stats Error]:", error);

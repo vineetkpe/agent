@@ -1,5 +1,5 @@
 import React from "react";
-import { Globe, Activity, ArrowRight, AlertTriangle, HeartPulse, ArrowUpRight, Check } from "lucide-react";
+import { Globe, Activity, ArrowRight, AlertTriangle, HeartPulse, ArrowUpRight, Check, Sparkles } from "lucide-react";
 import { Card } from "../ui/Card";
 
 interface CrawlerTabProps {
@@ -16,6 +16,8 @@ interface CrawlerTabProps {
   pageSpeedScanStatus?: "pending" | "running" | "done" | "failed";
   aiScanError?: string | null;
   pageSpeedScanError?: string | null;
+  prefilledKeyword?: string;
+  setPrefilledKeyword?: (keyword: string) => void;
 }
 
 export const CrawlerTab: React.FC<CrawlerTabProps> = ({
@@ -32,6 +34,8 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
   pageSpeedScanStatus = "pending",
   aiScanError = null,
   pageSpeedScanError = null,
+  prefilledKeyword = "",
+  setPrefilledKeyword,
 }) => {
   const metaFixes =
     currentAudit?.items?.filter((item: any) =>
@@ -46,6 +50,24 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
         <p className="text-sm mb-6 text-zinc-650">
           Enter your domain URL to start crawling subpages, searching SEO tag omissions, alt validation, broken link status, and duplicate content checks.
         </p>
+
+        {prefilledKeyword && (
+          <div className="mb-4 p-3 bg-violet-50 border-2 border-zinc-955 rounded-xl text-xs text-violet-755 flex items-center justify-between font-mono animate-fade-in shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
+              <span>Target keyword pre-filled: <strong>"{prefilledKeyword}"</strong>. The AI Content Suite will write article drafts targeting this query.</span>
+            </div>
+            {setPrefilledKeyword && (
+              <button
+                type="button"
+                onClick={() => setPrefilledKeyword("")}
+                className="font-bold underline text-violet-650 hover:text-violet-855 cursor-pointer text-[10px] uppercase tracking-wider shrink-0"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleRunAudit} className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
