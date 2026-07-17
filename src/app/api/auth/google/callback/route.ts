@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { findMatchingGaProperty } from "@/lib/googleAnalytics";
 
 function getPossibleGscProperties(siteUrl: string): string[] {
   let url = siteUrl.trim();
@@ -138,7 +139,15 @@ export async function GET(req: Request) {
       );
     }
 
-    // Save the encrypted refresh token + verified property url
+    // Look up and find matching Google Analytics 4 property
+    let gaPropertyId: string | null = null;
+    try {
+      gaPropertyId = await findMatchingGaProperty(accessToken, site.url);
+    } catch (gaErr) {
+      console.error("[GA Match Callback Error]:", gaErr);
+    }
+
+    // Save the encrypted refresh token + verified property url + GA properties
     await prisma.site.update({
       where: { id: site.id },
       data: {
@@ -147,11 +156,17 @@ export async function GET(req: Request) {
         gscVerifiedPropertyUrl: matchedProperty.siteUrl,
         googleRefreshTokenEncrypted: googleRefreshTokenEncrypted,
         gscLastSyncedAt: new Date(),
+        gaPropertyId: gaPropertyId,
+        gaConnected: !!gaPropertyId,
       },
     });
 
+    const successMsg = gaPropertyId
+      ? "Google Search Console and Google Analytics 4 connected successfully!"
+      : "Google Search Console connected successfully! (No matching Google Analytics 4 property found)";
+
     return NextResponse.redirect(
-      `${appUrl}/dashboard?tab=connections&success=Google Search Console connected successfully!`
+      `${appUrl}/dashboard?tab=connections&success=${encodeURIComponent(successMsg)}`
     );
   } catch (error: any) {
     console.error("[GSC Callback Error]:", error);

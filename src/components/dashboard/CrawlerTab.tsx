@@ -1,6 +1,9 @@
 import React from "react";
-import { Globe, Activity, ArrowRight, AlertTriangle, HeartPulse, ArrowUpRight, Check, Sparkles } from "lucide-react";
+import { Globe, Activity, ArrowRight, AlertTriangle, HeartPulse, ArrowUpRight, Check, Sparkles, Calendar } from "lucide-react";
 import { Card } from "../ui/Card";
+import { Badge } from "../ui/Badge";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { supabase } from "@/lib/supabaseClient";
 
 interface CrawlerTabProps {
   handleRunAudit: (e: React.FormEvent) => void;
@@ -18,6 +21,8 @@ interface CrawlerTabProps {
   pageSpeedScanError?: string | null;
   prefilledKeyword?: string;
   setPrefilledKeyword?: (keyword: string) => void;
+  currentUser?: any;
+  onRefresh?: () => void;
 }
 
 export const CrawlerTab: React.FC<CrawlerTabProps> = ({
@@ -36,7 +41,88 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
   pageSpeedScanError = null,
   prefilledKeyword = "",
   setPrefilledKeyword,
+  currentUser,
+  onRefresh,
 }) => {
+  const [scheduleEnabled, setScheduleEnabled] = React.useState(currentSite?.crawlScheduleEnabled ?? false);
+  const [scheduleHour, setScheduleHour] = React.useState(currentSite?.crawlScheduleHourUtc ?? 0);
+  const [isUpdating, setIsUpdating] = React.useState(false);
+  const [scheduleMessage, setScheduleMessage] = React.useState<{ text: string; isError: boolean } | null>(null);
+
+  React.useEffect(() => {
+    if (currentSite) {
+      setScheduleEnabled(currentSite.crawlScheduleEnabled ?? false);
+      setScheduleHour(currentSite.crawlScheduleHourUtc ?? 0);
+    }
+  }, [currentSite]);
+
+  const limits = getEffectivePlanLimits(currentUser);
+  const isFeatureEnabled = limits.autoScheduledCrawl;
+
+  const hourOptions = React.useMemo(() => {
+    return Array.from({ length: 24 }, (_, utcHour) => {
+      const date = new Date();
+      date.setUTCHours(utcHour, 0, 0, 0);
+      const localTimeString = date.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return {
+        utcHour,
+        label: localTimeString,
+      };
+    });
+  }, []);
+
+  const nextRunDate = React.useMemo(() => {
+    if (!scheduleEnabled || scheduleHour === null) return null;
+    const now = new Date();
+    const next = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      Number(scheduleHour),
+      0,
+      0,
+      0
+    ));
+    if (next.getTime() <= now.getTime()) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
+    return next;
+  }, [scheduleEnabled, scheduleHour]);
+
+  const handleUpdateSchedule = async () => {
+    setIsUpdating(true);
+    setScheduleMessage(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch("/api/site/schedule", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          siteId: currentSite.id,
+          crawlScheduleEnabled: scheduleEnabled,
+          crawlScheduleHourUtc: Number(scheduleHour),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update schedule settings");
+      }
+      setScheduleMessage({ text: "Schedule updated successfully!", isError: false });
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setScheduleMessage({ text: err.message || "Failed to save schedule.", isError: true });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
   const metaFixes =
     currentAudit?.items?.filter((item: any) =>
       ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link"].includes(item.type)
@@ -197,6 +283,93 @@ export const CrawlerTab: React.FC<CrawlerTabProps> = ({
           </div>
         )}
       </Card>
+
+      {currentSite && (
+        <Card variant="shadow">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-5 h-5 text-violet-650 font-bold" />
+            <h2 className="text-xl font-bold text-zinc-900">Automatic Crawl Scheduling</h2>
+          </div>
+          <p className="text-sm mb-6 text-zinc-650">
+            Set up automatic daily crawls to inspect your website for SEO issues and keep track of your SEO trends over time.
+          </p>
+
+          {!isFeatureEnabled ? (
+            <div className="p-4 bg-zinc-50 border-2 border-zinc-950 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <span className="text-xs uppercase font-extrabold text-violet-655 font-mono">Plan Feature Required</span>
+                <p className="text-xs mt-1 text-zinc-600">
+                  Daily automated crawl scheduling is only available on Growth and Agency plans. Upgrade your package to enable this feature.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => selectTab("settings")}
+                className="px-4 py-2 border-2 border-zinc-950 text-xs font-bold font-mono uppercase bg-violet-600 text-white rounded-xl shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] font-bold cursor-pointer"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={scheduleEnabled}
+                    onChange={(e) => setScheduleEnabled(e.target.checked)}
+                    className="w-5 h-5 accent-violet-600 border-2 border-zinc-950 rounded cursor-pointer animate-fade-in"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-zinc-800">Enable Daily Crawl</span>
+                    <p className="text-[10px] text-zinc-500">Run a complete crawl audit every 24 hours.</p>
+                  </div>
+                </label>
+
+                {scheduleEnabled && (
+                  <div className="flex items-center gap-3 animate-fade-in">
+                    <span className="text-sm font-bold text-zinc-805">Hour of Day (Local Time):</span>
+                    <select
+                      value={scheduleHour}
+                      onChange={(e) => setScheduleHour(Number(e.target.value))}
+                      className="px-2.5 py-1.5 text-xs font-bold border-2 border-zinc-950 bg-white rounded-lg focus:outline-none shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]"
+                    >
+                      {hourOptions.map((opt) => (
+                        <option key={opt.utcHour} value={opt.utcHour}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {scheduleEnabled && nextRunDate && (
+                <div className="text-xs font-mono font-bold text-violet-650 bg-violet-50/50 p-3 rounded-xl border border-violet-200 inline-block animate-fade-in">
+                  Next scheduled run: {nextRunDate.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 border-t pt-4 border-zinc-100">
+                <button
+                  type="button"
+                  onClick={handleUpdateSchedule}
+                  disabled={isUpdating}
+                  className="px-4 py-2 border-2 border-zinc-950 bg-white text-zinc-955 text-xs font-bold uppercase tracking-wider font-mono rounded-xl shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] disabled:opacity-50 cursor-pointer"
+                >
+                  {isUpdating ? "Saving..." : "Save Schedule Settings"}
+                </button>
+
+                {scheduleMessage && (
+                  <span className={`text-xs font-mono font-bold ${scheduleMessage.isError ? "text-rose-600" : "text-emerald-600"}`}>
+                    {scheduleMessage.text}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Crawler Audit Output */}
       {currentAudit ? (

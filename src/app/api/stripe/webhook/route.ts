@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2025-01-27.accredited-preview" as any }) : null;
+const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
 
 export async function POST(req: Request) {
   const body = await req.text();

@@ -94,7 +94,21 @@ export async function POST(req: Request) {
       },
     }) : [];
 
-    const businessProfile = site?.businessProfile ? JSON.parse(site.businessProfile) : null;
+    const manuallyEntered = site?.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
+    const businessProfile = site?.businessProfile
+      ? JSON.parse(site.businessProfile)
+      : (manuallyEntered ? {
+          summary: manuallyEntered.description,
+          industry: manuallyEntered.industry,
+          category: manuallyEntered.industry,
+          products: [],
+          services: manuallyEntered.services || [],
+          targetAudience: manuallyEntered.targetAudience,
+          brandVoice: "Professional",
+          usps: [`Located in ${manuallyEntered.cityServiceArea}`],
+          competitors: [],
+          confidenceScore: 1.0,
+        } : null);
 
     // Construct the context prompt containing history
     const historyText = messages

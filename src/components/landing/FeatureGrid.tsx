@@ -1,5 +1,5 @@
 import React from "react";
-import { Globe, Sparkles, FileText, Terminal, TrendingUp, Users } from "lucide-react";
+import { Globe, Sparkles, FileText, Activity, ShieldCheck, Database } from "lucide-react";
 
 export const FeatureGrid: React.FC = () => {
   return (
@@ -7,10 +7,10 @@ export const FeatureGrid: React.FC = () => {
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-20">
           <h2 className="text-3xl sm:text-4xl font-extrabold mb-4 font-sans tracking-tight text-zinc-950">
-            An Autonomous Specialist for your Digital Footprint
+            Professional SEO Audits & Easy Implementation
           </h2>
           <p className="leading-relaxed text-zinc-650 text-sm">
-            Why pay consulting fees? HeyDrona executes digital growth skills 24/7. It audits performance, builds pipelines of search relevance, analyzes competitors, and submits weekly summaries.
+            HeyDrona gives you tools to scan your website for SEO health problems and quickly apply optimizations. You maintain full control — no changes are pushed without your explicit approval.
           </p>
         </div>
 
@@ -22,10 +22,9 @@ export const FeatureGrid: React.FC = () => {
             </div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Deep Site Crawler</h3>
-              <span className="text-xs text-yellow-500">⭐⭐⭐⭐⭐</span>
             </div>
             <p className="text-xs leading-relaxed text-zinc-650">
-              Crawls your entire website structure. Examines key ranking parameters: missing titles, empty meta descriptions, schema markup irregularities, alt tags, duplicate copy, and links status.
+              Scans your website links and identifies standard SEO issues: missing title tags, empty meta descriptions, schema markup opportunities, broken links, and images lacking alt text.
             </p>
           </div>
 
@@ -36,10 +35,9 @@ export const FeatureGrid: React.FC = () => {
             </div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-extrabold text-zinc-900 font-mono">AI Recommendations</h3>
-              <span className="text-xs text-yellow-500">⭐⭐⭐⭐⭐</span>
             </div>
             <p className="text-xs leading-relaxed text-zinc-655">
-              Rather than listing charts, HeyDrona isolates issues, explains why they affect rank, estimates impact, and generates one-click automated edits for your connected CMS.
+              Instead of complex, confusing spreadsheets, we explain detected issues in plain English, estimate their priority, and generate recommended text fixes that you can apply instantly.
             </p>
           </div>
 
@@ -49,53 +47,49 @@ export const FeatureGrid: React.FC = () => {
               <FileText className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Content Generation</h3>
-              <span className="text-xs text-zinc-500">⭐⭐⭐⭐☆</span>
+              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Content Helper</h3>
             </div>
             <p className="text-xs leading-relaxed text-zinc-650">
-              Finds keyword terms, structures outlines, and drafts articles. Packages articles with custom FAQs, matching schemas, meta tags, and alt descriptions, ready for CMS publishing.
+              Generates structure outlines, FAQ lists, and draft articles for your blog. Tailors copy, headings, and descriptions to match SEO best practices before you publish.
             </p>
           </div>
 
-          {/* Feature 4: Daily Scheduler */}
+          {/* Feature 4: WordPress CMS integration */}
           <div className="p-8 rounded-2xl border-2 transition-all duration-305 group relative overflow-hidden border-zinc-950 bg-zinc-50/50 hover:border-violet-500/20 hover:bg-white hover:shadow-[4px_4px_0px_0px_rgba(9,9,11,1)]">
             <div className="w-12 h-12 rounded-xl bg-violet-600/10 border-2 border-zinc-950 flex items-center justify-center text-violet-500 mb-6 group-hover:scale-110 transition-transform shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
-              <Terminal className="w-6 h-6" />
+              <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Daily Growth Runs</h3>
-              <span className="text-xs text-violet-600 font-mono bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20 font-bold">Active</span>
+              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">One-Click CMS Sync</h3>
             </div>
             <p className="text-xs leading-relaxed text-zinc-650">
-              Every single day, the agent checks your site: compresses image sizes, updates titles, inserts relevant internal navigation links, checks for broken anchors, and schedules fresh posts.
+              Connect your WordPress site securely using restricted author credentials. Once connected, you can deploy your approved metadata fixes and blog drafts directly in one click.
             </p>
           </div>
 
-          {/* Feature 5: Keyword Tracker */}
+          {/* Feature 5: Google Search Console */}
           <div className="p-8 rounded-2xl border-2 transition-all duration-305 group relative overflow-hidden border-zinc-950 bg-zinc-50/50 hover:border-violet-500/20 hover:bg-white hover:shadow-[4px_4px_0px_0px_rgba(9,9,11,1)]">
             <div className="w-12 h-12 rounded-xl bg-violet-600/10 border-2 border-zinc-950 flex items-center justify-center text-violet-500 mb-6 group-hover:scale-110 transition-transform shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
-              <TrendingUp className="w-6 h-6" />
+              <Database className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Keyword Tracker</h3>
-              <span className="text-xs text-violet-600 font-mono bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20 font-bold">Historical</span>
+              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Search Console Integration</h3>
             </div>
             <p className="text-xs leading-relaxed text-zinc-650">
-              Tracks target keyword indexes, search query placement patterns, and impressions over time to visually verify optimization outcomes and monitor performance curves.
+              Sync directly with Google Search Console to pull real search queries, impressions, and click-through rates, helping you spot which pages need immediate optimization.
             </p>
           </div>
 
-          {/* Feature 6: Competitor Analyzer */}
+          {/* Feature 6: Uptime Checks */}
           <div className="p-8 rounded-2xl border-2 transition-all duration-305 group relative overflow-hidden border-zinc-950 bg-zinc-50/50 hover:border-violet-500/20 hover:bg-white hover:shadow-[4px_4px_0px_0px_rgba(9,9,11,1)]">
             <div className="w-12 h-12 rounded-xl bg-violet-600/10 border-2 border-zinc-950 flex items-center justify-center text-violet-500 mb-6 group-hover:scale-110 transition-transform shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
-              <Users className="w-6 h-6" />
+              <Activity className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Competitor Auditing</h3>
-              <span className="text-xs text-violet-600 font-mono bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20 font-bold">Comparative</span>
+              <h3 className="text-lg font-extrabold text-zinc-900 font-mono">Uptime Monitoring</h3>
             </div>
             <p className="text-xs leading-relaxed text-zinc-650">
-              Analyzes overlapping competitor search rankings, outlines content gaps, tracks backlink profiles, and crawls competitor landing URLs to compile strategic references.
+              Monitors your website constantly to ensure it is online. If your website goes down, we record the downtime details so you can contact your hosting provider.
             </p>
           </div>
         </div>
@@ -103,4 +97,5 @@ export const FeatureGrid: React.FC = () => {
     </section>
   );
 };
+
 export default FeatureGrid;

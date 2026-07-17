@@ -14,16 +14,15 @@ export const Header: React.FC = () => {
             HeyDrona<span className="text-violet-500">.</span>
           </span>
           <span className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded font-mono font-bold border-2 bg-zinc-100 text-violet-600 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
-            AI GROWTH WORKER v1
+            SaaS Platform
           </span>
         </div>
 
         <nav className="hidden lg:flex items-center gap-8 text-xs font-bold uppercase tracking-wider font-mono text-zinc-500">
-          <a href="#sandbox" className="transition-colors hover:text-zinc-950">Diagnostics Board</a>
-          <a href="#streamer" className="transition-colors hover:text-zinc-950">Live URL Streamer</a>
-          <a href="#editor" className="transition-colors hover:text-zinc-950">AI Outline Editor</a>
-          <a href="#scheduler" className="transition-colors hover:text-zinc-950">7-Day Logs</a>
-          <a href="#faq" className="transition-colors hover:text-zinc-950">FAQ Panel</a>
+          <Link href="/#pricing" className="transition-colors hover:text-zinc-950">Pricing</Link>
+          <Link href="/company" className="transition-colors hover:text-zinc-950">Company</Link>
+          <Link href="/services" className="transition-colors hover:text-zinc-950">Services</Link>
+          <Link href="/resources" className="transition-colors hover:text-zinc-950">Resources</Link>
         </nav>
 
         <div className="flex items-center gap-4">
@@ -38,7 +37,7 @@ export const Header: React.FC = () => {
             href="/signup"
             className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider font-mono text-white bg-gradient-to-r from-violet-600 to-indigo-500 rounded-xl transition-all flex items-center gap-2 border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:scale-[1.02] hover:translate-x-[2px] hover:translate-y-[2px]"
           >
-            Hire Agent <ArrowRight className="w-4 h-4" />
+            Get Started <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>

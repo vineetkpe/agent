@@ -11,7 +11,6 @@ import Footer from "@/components/landing/Footer";
 const CrawlerSandbox = dynamic(() => import("@/components/landing/CrawlerSandbox"), { ssr: false });
 const LiveUrlStreamer = dynamic(() => import("@/components/landing/LiveUrlStreamer"), { ssr: false });
 const OutlineEditorDemo = dynamic(() => import("@/components/landing/OutlineEditorDemo"), { ssr: false });
-const SevenDayScheduler = dynamic(() => import("@/components/landing/SevenDayScheduler"), { ssr: false });
 const Faq = dynamic(() => import("@/components/landing/Faq"), { ssr: false });
 
 export default function Home() {
@@ -25,7 +24,6 @@ export default function Home() {
       <CrawlerSandbox />
       <LiveUrlStreamer />
       <OutlineEditorDemo />
-      <SevenDayScheduler />
       <FeatureGrid />
       <WorkflowSteps />
       <Pricing />

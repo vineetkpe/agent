@@ -47,9 +47,9 @@ export const BillingUpgradeBanner: React.FC<BillingUpgradeBannerProps> = ({
     const ageMs = Date.now() - latestDate.getTime();
     daysSinceLastAudit = Math.floor(ageMs / (1000 * 60 * 60 * 24));
     
-    // Nudge if audit is older than 14 days and plan doesn't have autoWeeklyRescan
-    const hasAutoWeeklyRescan = limits.autoWeeklyRescan;
-    showScanNudge = daysSinceLastAudit > 14 && !hasAutoWeeklyRescan;
+    // Nudge if audit is older than 14 days and plan doesn't have autoScheduledCrawl
+    const hasAutoScheduledCrawl = limits.autoScheduledCrawl;
+    showScanNudge = daysSinceLastAudit > 14 && !hasAutoScheduledCrawl;
   }
 
   React.useEffect(() => {

@@ -20,13 +20,17 @@ import { NotificationsTab } from "@/components/dashboard/NotificationsTab";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
-import { SupportTab } from "@/components/dashboard/SupportTab";
 import { ChevronRight, Menu } from "lucide-react";
+import { AgentFlowView } from "@/components/dashboard/AgentFlowView";
+import { CompetitorTab } from "@/components/dashboard/CompetitorTab";
+import { UptimeWidget } from "@/components/dashboard/UptimeWidget";
+import { AddSiteFlow } from "@/components/dashboard/AddSiteFlow";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [planLimitError, setPlanLimitError] = useState<{ message: string; type?: string } | null>(null);
+  const [isAddSiteWizardOpen, setIsAddSiteWizardOpen] = useState(false);
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -278,6 +282,8 @@ export default function DashboardPage() {
               pageSpeedScanError={data.pageSpeedScanError}
               prefilledKeyword={data.prefilledKeyword}
               setPrefilledKeyword={data.setPrefilledKeyword}
+              currentUser={data.currentUser}
+              onRefresh={() => data.fetchInitialData(data.currentSite?.id)}
             />
           )}
 
@@ -341,7 +347,38 @@ export default function DashboardPage() {
               deleteSite={data.deleteSite}
               toggleGscConnection={data.toggleGscConnection}
               addSite={data.addSite}
+              openAddSiteWizard={() => setIsAddSiteWizardOpen(true)}
             />
+          )}
+
+          {data.activeTab === "flow" && (
+            <AgentFlowView
+              currentSite={data.currentSite}
+              currentAudit={data.currentAudit}
+              isCrawling={data.isCrawling}
+              crawlStep={data.crawlStep}
+              selectTab={data.selectTab}
+              onRefresh={() => data.fetchInitialData(data.currentSite?.id)}
+            />
+          )}
+
+          {data.activeTab === "competitors" && (
+            <CompetitorTab
+              currentSite={data.currentSite}
+              currentAudit={data.currentAudit}
+              selectTab={data.selectTab}
+            />
+          )}
+
+          {data.activeTab === "uptime" && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <UptimeWidget
+                currentSite={data.currentSite}
+                uptimeChecks={data.uptimeChecks}
+                currentUser={data.currentUser}
+                onRefresh={() => data.fetchInitialData(data.currentSite?.id)}
+              />
+            </div>
           )}
 
           {data.activeTab === "context" && (
@@ -376,14 +413,32 @@ export default function DashboardPage() {
           {data.activeTab === "notifications" && (
             <NotificationsTab selectTab={data.selectTab} />
           )}
-
-          {data.activeTab === "support" && (
-            <SupportTab />
-          )}
         </div>
       </main>
       </div>
       <Chatbot currentSite={data.currentSite} />
+
+      {isAddSiteWizardOpen && (
+        <AddSiteFlow
+          onClose={() => {
+            setIsAddSiteWizardOpen(false);
+            data.fetchInitialData(data.selectedSiteId || undefined);
+          }}
+          currentUser={data.currentUser}
+          currentSite={data.currentSite}
+          toggleGscConnection={data.toggleGscConnection}
+          handleConnectCMS={data.handleConnectCMS}
+          wpUrl={data.wpUrl}
+          setWpUrl={data.setWpUrl}
+          wpUsername={data.wpUsername}
+          setWpUsername={data.setWpUsername}
+          wpAppPassword={data.wpAppPassword}
+          setWpAppPassword={data.setWpAppPassword}
+          isConnectingWp={data.isConnectingWp}
+          wpMessage={data.wpMessage}
+          fetchInitialData={data.fetchInitialData}
+        />
+      )}
 
       {planLimitError && (
         <div className="fixed inset-0 bg-zinc-950/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">

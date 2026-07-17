@@ -16,6 +16,7 @@ interface SitesTabProps {
   deleteSite: (id: string) => void;
   toggleGscConnection: (id: string, gscUrl?: string, disconnect?: boolean) => void;
   addSite: (url: string) => void;
+  openAddSiteWizard?: () => void;
 }
 
 export const SitesTab: React.FC<SitesTabProps> = ({
@@ -30,6 +31,7 @@ export const SitesTab: React.FC<SitesTabProps> = ({
   deleteSite,
   toggleGscConnection,
   addSite,
+  openAddSiteWizard,
 }) => {
   const selectedSite = allSites.find((s) => s.id === selectedSiteId);
 
@@ -45,9 +47,13 @@ export const SitesTab: React.FC<SitesTabProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              const urlInput = prompt("Enter a new website URL (e.g. hostamble.com):");
-              if (urlInput) {
-                addSite(urlInput);
+              if (openAddSiteWizard) {
+                openAddSiteWizard();
+              } else {
+                const urlInput = prompt("Enter a new website URL (e.g. hostamble.com):");
+                if (urlInput) {
+                  addSite(urlInput);
+                }
               }
             }}
             type="button"

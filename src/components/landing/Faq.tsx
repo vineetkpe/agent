@@ -20,8 +20,8 @@ export const Faq: React.FC = () => {
           Frequently Asked Questions
         </span>
         <h2 className="text-3xl font-extrabold tracking-tight mt-1 text-zinc-950 font-mono">Answers & Support</h2>
-        <p className="text-sm mt-1.5 text-zinc-550 max-w-xl mx-auto font-sans">
-          Everything you need to know about setting up and working with an autonomous AI employee for SEO growth.
+        <p className="text-sm mt-1.5 text-zinc-555 max-w-xl mx-auto font-sans">
+          Everything you need to know about setting up and working with HeyDrona for SEO growth.
         </p>
       </div>
 
@@ -33,14 +33,12 @@ export const Faq: React.FC = () => {
             type="button"
             className="w-full px-6 py-4 flex items-center justify-between font-bold text-sm text-zinc-900 hover:bg-zinc-50 transition-colors font-mono"
           >
-            <span>What exactly is an AI growth employee?</span>
+            <span>What exactly is HeyDrona?</span>
             {faqOpen.faq1 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           {faqOpen.faq1 && (
-            <div className="px-6 pb-4 pt-2 text-xs leading-relaxed text-zinc-600 border-t border-zinc-200 font-sans">
-              An AI growth employee is a virtual staff agent that runs 24/7. It connects directly to your web domains
-              and CMS systems. It performs deep crawl audits, identifies code omissions, generates optimized
-              titles/alt descriptions, maps keywords, and drafts and uploads complete outline blog pages autonomously.
+            <div className="px-6 pb-4 pt-2 text-xs leading-relaxed text-zinc-650 border-t border-zinc-200 font-sans">
+              HeyDrona is an AI-powered SEO assistant. It connects to your website and CMS systems, runs deep crawl audits, identifies technical issues, suggests optimized titles/alt descriptions, and drafts blog outline posts for your review and one-click publishing.
             </div>
           )}
         </div>
@@ -59,7 +57,7 @@ export const Faq: React.FC = () => {
             <div className="px-6 pb-4 pt-2 text-xs leading-relaxed text-zinc-600 border-t border-zinc-200 font-sans">
               Yes, absolutely. We enforce secure **Least Privilege Credentials**. Instead of inputting primary site admin
               credentials, our setup manual instructs you to create a separate user account with restricted
-              &quot;Author&quot; or &quot;Editor&quot; permissions and assign a localized application key. The AI employee can only
+              &quot;Author&quot; or &quot;Editor&quot; permissions and assign a localized application key. The AI assistant can only
               compile drafts for review and cannot edit core system themes or configuration settings.
             </div>
           )}
@@ -77,9 +75,9 @@ export const Faq: React.FC = () => {
           </button>
           {faqOpen.faq3 && (
             <div className="px-6 pb-4 pt-2 text-xs leading-relaxed text-zinc-650 border-t border-zinc-200 font-sans">
-              Traditional tools require you to interpret data, compile sheets, and manually perform edits. HeyDrona does
-              not just report—it takes action. It isolates crawl gaps, explains why they reduce organic click value,
-              estimates impact metrics, generates correct replacement tags, and pushes drafts with one click.
+              Traditional tools require you to interpret data, compile spreadsheets, and make complex manual changes. HeyDrona does
+              not just report—it simplifies the action. It highlights technical problems, explains why they affect your SEO,
+              estimates their priority, and generates correct tags or outlines that you can push live in one click after your review.
             </div>
           )}
         </div>

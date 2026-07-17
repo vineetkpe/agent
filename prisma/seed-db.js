@@ -25,7 +25,7 @@ async function main() {
     { key: "cooldownMinutes", label: "Audit Cooldown Period", type: "number", description: "Cooldown time between consecutive audits (in minutes)" },
     { key: "wpAutoApply", label: "WordPress Auto-Apply", type: "boolean", description: "Allow AI-generated suggestions to be auto-published to WordPress" },
     { key: "chatbot", label: "AI Chat Assistant", type: "boolean", description: "Allow chatting with the AI growth agent regarding diagnostics" },
-    { key: "autoWeeklyRescan", label: "Weekly Automatic Re-scan", type: "boolean", description: "Enable automatic weekly audits and email reports" },
+    { key: "autoScheduledCrawl", label: "Daily Scheduled Crawl", type: "boolean", description: "Enable automatic daily scheduled SEO audits" },
     { key: "pdfExport", label: "Downloadable PDF Reports", type: "boolean", description: "Allow exporting audits as PDF documents" },
     { key: "whiteLabelReport", label: "White-label PDF Reports", type: "boolean", description: "Allow custom logos and white-labeled PDF audits" },
     { key: "uptimeMonitoring", label: "Uptime & Latency Monitoring", type: "boolean", description: "Enable active uptime and latency inspections every 5 minutes" }
@@ -60,7 +60,7 @@ async function main() {
         cooldownMinutes: 1440,
         wpAutoApply: false,
         chatbot: false,
-        autoWeeklyRescan: false,
+        autoScheduledCrawl: false,
         pdfExport: false,
         whiteLabelReport: false,
         uptimeMonitoring: true // Universal per UPTIME-FREE-1
@@ -79,7 +79,7 @@ async function main() {
         cooldownMinutes: 1440,
         wpAutoApply: true,
         chatbot: true,
-        autoWeeklyRescan: false,
+        autoScheduledCrawl: false,
         pdfExport: false,
         whiteLabelReport: false,
         uptimeMonitoring: true
@@ -98,7 +98,7 @@ async function main() {
         cooldownMinutes: 360,
         wpAutoApply: true,
         chatbot: true,
-        autoWeeklyRescan: true,
+        autoScheduledCrawl: true,
         pdfExport: true,
         whiteLabelReport: false,
         uptimeMonitoring: true
@@ -117,7 +117,7 @@ async function main() {
         cooldownMinutes: 60,
         wpAutoApply: true,
         chatbot: true,
-        autoWeeklyRescan: true,
+        autoScheduledCrawl: true,
         pdfExport: true,
         whiteLabelReport: true,
         uptimeMonitoring: true

@@ -62,9 +62,9 @@ export const CrawlerSandbox: React.FC = () => {
   const [fixingNodeId, setFixingNodeId] = useState<string | null>(null);
   const [agentVelocity, setAgentVelocity] = useState(2);
   const [sandboxLogs, setSandboxLogs] = useState<string[]>([
-    "🤖 Growth Employee initialized. Listening for targets...",
-    "🔍 Analyzing website root elements...",
-    "⚠️ Found 4 crawl anomalies. Select nodes above to repair.",
+    "🤖 Assistant initialized. Awaiting diagnostic tasks...",
+    "🔍 [Illustrative Demo] Analyzing website root variables...",
+    "⚠️ Found 4 crawl anomalies. Select nodes above to simulate repair.",
   ]);
   const [seoScore, setSeoScore] = useState(58);
 
@@ -113,8 +113,8 @@ export const CrawlerSandbox: React.FC = () => {
     <section id="sandbox" className="py-16 px-6 max-w-6xl mx-auto w-full relative">
       {/* Handwritten script annotation pointing to widget */}
       <div className="absolute -top-6 left-10 md:left-24 rotate-[-3deg] z-10 pointer-events-none hidden sm:block animate-pulse">
-        <span className="font-caveat text-violet-600 text-lg md:text-xl block">
-          ✏️ This is our live crawler simulation! Hover over nodes and click to fix!
+        <span className="font-caveat text-violet-605 text-lg md:text-xl block">
+          ✏️ Illustrative Preview: Select issue nodes and click &quot;Fix&quot; to see how updates are simulated.
         </span>
         <svg
           className="w-16 h-8 text-violet-500 mt-1 ml-6"
@@ -131,7 +131,7 @@ export const CrawlerSandbox: React.FC = () => {
 
       {/* Demo Badge */}
       <div className="flex justify-start mb-2">
-        <Badge variant="amber">Interactive Demo -- Illustrative</Badge>
+        <Badge variant="amber">Example Output -- Illustrative Preview</Badge>
       </div>
 
       {/* Interactive Sandbox Card */}
@@ -142,9 +142,9 @@ export const CrawlerSandbox: React.FC = () => {
             <span className="text-[10px] uppercase font-bold tracking-wider font-mono block text-violet-600">
               CRAWLER DIAGNOSTICS BOARD
             </span>
-            <h3 className="text-xl font-extrabold mt-1 leading-snug text-zinc-950">Simulated Site Map</h3>
+            <h3 className="text-xl font-extrabold mt-1 leading-snug text-zinc-950">Example Site Diagnostics Map</h3>
             <p className="text-xs mt-1.5 leading-relaxed text-zinc-550">
-              The agent is currently crawling page nodes, analyzing meta variables, broken link tags, and missing image alt tags.
+              This preview illustrates how HeyDrona maps out page nodes and spots optimization errors (like missing title tags or duplicate description copies) for you to fix.
             </p>
           </div>
 

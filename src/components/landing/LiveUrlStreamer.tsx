@@ -43,19 +43,19 @@ export const LiveUrlStreamer: React.FC = () => {
     <section id="streamer" className="py-16 px-6 max-w-6xl mx-auto w-full border-t-2 border-zinc-200">
       {/* Demo Badge */}
       <div className="flex justify-start mb-2">
-        <Badge variant="amber">Interactive Demo -- Illustrative</Badge>
+        <Badge variant="amber">Example Output -- Illustrative Preview</Badge>
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
-          <span className="text-xs text-violet-605 font-bold tracking-wider uppercase font-mono">
-            Real-time HTTP Monitoring
+          <span className="text-xs text-violet-650 font-bold tracking-wider uppercase font-mono">
+            Simulated Crawler Logs
           </span>
           <h2 className="text-3xl font-extrabold tracking-tight mt-1 text-zinc-950 font-mono">
-            Live URL Crawler Streamer
+            URL Crawler Log Example
           </h2>
-          <p className="text-sm mt-1.5 text-zinc-550 leading-relaxed max-w-2xl font-sans">
-            Observe search bot crawling activity as our growth employee scans subpage targets for metadata gaps, slow assets, alt properties, and broken outbound anchor paths.
+          <p className="text-sm mt-1.5 text-zinc-555 leading-relaxed max-w-2xl font-sans">
+            An illustrative simulation of how the crawler scans subpage targets for metadata gaps, heavy assets, and broken links.
           </p>
         </div>
 

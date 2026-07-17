@@ -8,6 +8,7 @@ import { ApprovalFunnelChart } from "./charts/ApprovalFunnelChart";
 
 import { AgentActivityLog } from "./AgentActivityLog";
 import { UptimeWidget } from "./UptimeWidget";
+import { GrowthTrendChart } from "./charts/GrowthTrendChart";
 
 interface OverviewTabProps {
   currentSite: any;
@@ -250,6 +251,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           )}
         </div>
       </div>
+
+      {/* Real SEO & Search Growth Trend Chart */}
+      <GrowthTrendChart currentSite={currentSite} />
 
       {/* Real Agent Activity Log */}
       <AgentActivityLog activityLog={activityLog} />

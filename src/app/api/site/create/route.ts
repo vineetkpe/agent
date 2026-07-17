@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { crawlSite, isThinContent } from "@/lib/crawler";
+import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 
 export async function POST(req: Request) {
   try {
@@ -77,10 +79,36 @@ export async function POST(req: Request) {
       },
     });
 
+    // Run crawler & check content quality
+    let isThin = true;
+    let businessProfileData = null;
+    let pages: any[] = [];
+    try {
+      const crawlResult = await crawlSite(cleanUrl, 5); // cap at 5 pages for onboarding scan speed
+      pages = crawlResult.pages;
+      isThin = isThinContent(pages);
+
+      if (!isThin && pages.length > 0) {
+        const profile = await analyzeBusinessProfile(pages, cleanUrl, currentUser.id);
+        businessProfileData = JSON.stringify(profile);
+
+        // update site with businessProfile
+        site = await prisma.site.update({
+          where: { id: site.id },
+          data: {
+            businessProfile: businessProfileData,
+          },
+        });
+      }
+    } catch (crawlErr) {
+      console.error("[Onboarding Crawl Error]:", crawlErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "New site added successfully!",
       site,
+      isThin,
     });
   } catch (error: any) {
     console.error("[Site Create API Error]:", error);

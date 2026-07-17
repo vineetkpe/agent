@@ -5,7 +5,7 @@ export interface PlanLimits {
   cooldownMinutes: number;
   wpAutoApply: boolean;
   chatbot: boolean;
-  autoWeeklyRescan: boolean;
+  autoScheduledCrawl: boolean;
   pdfExport: boolean;
   whiteLabelReport: boolean;
   uptimeMonitoring: boolean;
@@ -46,7 +46,7 @@ async function loadPlanLimitsFromDb(): Promise<Record<string, PlanLimits>> {
         cooldownMinutes: 1440,
         wpAutoApply: false,
         chatbot: false,
-        autoWeeklyRescan: false,
+        autoScheduledCrawl: false,
         pdfExport: false,
         whiteLabelReport: false,
         uptimeMonitoring: true, // Universal per UPTIME-FREE-1
@@ -91,7 +91,7 @@ function getFallbackPlanLimits(): Record<string, PlanLimits> {
       cooldownMinutes: 1440,
       wpAutoApply: false,
       chatbot: false,
-      autoWeeklyRescan: false,
+      autoScheduledCrawl: false,
       pdfExport: false,
       whiteLabelReport: false,
       uptimeMonitoring: true, // Universal per UPTIME-FREE-1
@@ -102,7 +102,7 @@ function getFallbackPlanLimits(): Record<string, PlanLimits> {
       cooldownMinutes: 1440,
       wpAutoApply: true,
       chatbot: true,
-      autoWeeklyRescan: false,
+      autoScheduledCrawl: false,
       pdfExport: false,
       whiteLabelReport: false,
       uptimeMonitoring: true,
@@ -113,7 +113,7 @@ function getFallbackPlanLimits(): Record<string, PlanLimits> {
       cooldownMinutes: 360,
       wpAutoApply: true,
       chatbot: true,
-      autoWeeklyRescan: true,
+      autoScheduledCrawl: true,
       pdfExport: true,
       whiteLabelReport: false,
       uptimeMonitoring: true,
@@ -124,7 +124,7 @@ function getFallbackPlanLimits(): Record<string, PlanLimits> {
       cooldownMinutes: 60,
       wpAutoApply: true,
       chatbot: true,
-      autoWeeklyRescan: true,
+      autoScheduledCrawl: true,
       pdfExport: true,
       whiteLabelReport: true,
       uptimeMonitoring: true,
@@ -156,7 +156,7 @@ export async function getEffectivePlanLimitsAsync(user?: {
       cooldownMinutes: 0,
       wpAutoApply: true,
       chatbot: true,
-      autoWeeklyRescan: true,
+      autoScheduledCrawl: true,
       pdfExport: true,
       whiteLabelReport: true,
       uptimeMonitoring: true,
@@ -170,7 +170,7 @@ export async function getEffectivePlanLimitsAsync(user?: {
       cooldownMinutes: Infinity,
       wpAutoApply: false,
       chatbot: false,
-      autoWeeklyRescan: false,
+      autoScheduledCrawl: false,
       pdfExport: false,
       whiteLabelReport: false,
       uptimeMonitoring: false,
@@ -204,7 +204,7 @@ export function getEffectivePlanLimits(user?: {
       cooldownMinutes: 0,
       wpAutoApply: true,
       chatbot: true,
-      autoWeeklyRescan: true,
+      autoScheduledCrawl: true,
       pdfExport: true,
       whiteLabelReport: true,
       uptimeMonitoring: true,
@@ -218,7 +218,7 @@ export function getEffectivePlanLimits(user?: {
       cooldownMinutes: Infinity,
       wpAutoApply: false,
       chatbot: false,
-      autoWeeklyRescan: false,
+      autoScheduledCrawl: false,
       pdfExport: false,
       whiteLabelReport: false,
       uptimeMonitoring: false,

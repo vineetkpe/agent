@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const isMock = !stripeSecret || stripeSecret === "mock-stripe-key";
 
-const stripe = !isMock ? new Stripe(stripeSecret!, { apiVersion: "2025-01-27.accredited-preview" as any }) : null;
+const stripe = !isMock ? new Stripe(stripeSecret!) : null;
 
 export async function POST(req: Request) {
   try {

@@ -5,8 +5,8 @@ import { getCurrentUser } from "@/lib/user";
 export async function GET(req: Request) {
   try {
     const currentUser = await getCurrentUser(req);
-    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "support")) {
-      return NextResponse.json({ error: "Forbidden: Admin or Support access required." }, { status: 403 });
+    if (!currentUser || currentUser.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden: Admin access required." }, { status: 403 });
     }
 
     // 1. Basic Stats

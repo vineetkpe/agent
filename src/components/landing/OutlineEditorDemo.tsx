@@ -71,18 +71,18 @@ AI OUTLINE STRUCTURE:
     <section id="editor" className="py-16 px-6 max-w-6xl mx-auto w-full border-t-2 border-zinc-200">
       {/* Demo Badge */}
       <div className="flex justify-start mb-2">
-        <Badge variant="amber">Interactive Demo -- Illustrative</Badge>
+        <Badge variant="amber">Example Output -- Illustrative Preview</Badge>
       </div>
 
       <div className="text-center max-w-3xl mx-auto mb-12">
         <span className="text-xs text-violet-650 font-bold tracking-wider uppercase font-mono">
-          Autonomous Content Blueprinting
+          AI Content Outline Example
         </span>
         <h2 className="text-3xl font-extrabold tracking-tight mt-1 text-zinc-950 font-mono">
-          AI Outline Live Editor Simulator
+          AI Outline Editor Example
         </h2>
-        <p className="text-sm mt-1.5 text-zinc-550 leading-relaxed font-sans">
-          Select a target keyword query on the left, and watch the growth employee compile SEO headings, FAQs, and article drafts in the editor workspace in real-time.
+        <p className="text-sm mt-1.5 text-zinc-555 leading-relaxed font-sans">
+          Select a target keyword on the left to see how HeyDrona generates article outlines, headings, and SEO meta descriptions for your review.
         </p>
       </div>
 
@@ -169,7 +169,7 @@ AI OUTLINE STRUCTURE:
             {isTyping && (
               <div className="flex items-center gap-2 text-violet-600 mb-4 animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-violet-600 animate-ping" />
-                <span>AI Employee writing outline. Validating search intent vectors...</span>
+                <span>Simulated AI draft compiling...</span>
               </div>
             )}
             <pre className="whitespace-pre-wrap font-mono text-xs text-zinc-700 leading-relaxed font-bold">

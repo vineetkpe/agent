@@ -14,7 +14,6 @@ import { AppSettingsPanel } from "@/components/admin/AppSettingsPanel";
 import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
 import { SiteManagementPanel } from "@/components/admin/SiteManagementPanel";
 import { PlanManagementPanel } from "@/components/admin/PlanManagementPanel";
-import { SupportQueuePanel } from "@/components/admin/SupportQueuePanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans" | "support">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans">("overview");
 
   const fetchStats = async () => {
     try {
@@ -54,9 +53,6 @@ export default function AdminPage() {
       const data = await res.json();
       setStats(data);
       setIsAuthorized(true);
-      if (data.currentUser?.role === "support") {
-        setActiveTab("support");
-      }
     } catch (err: any) {
       console.error("[Admin Stats Loading Error]:", err);
       setError(err.message || "Failed to load telemetry stats.");
@@ -206,14 +202,6 @@ export default function AdminPage() {
             </button>
           </>
         )}
-        <button
-          onClick={() => setActiveTab("support")}
-          className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ${stats?.currentUser?.role === "admin" ? "ml-2" : ""} transition-colors ${
-            activeTab === "support" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
-          }`}
-        >
-          Support Queue
-        </button>
       </div>
 
       <div className="max-w-7xl mx-auto">
@@ -271,12 +259,6 @@ export default function AdminPage() {
         {activeTab === "plans" && stats?.currentUser?.role === "admin" && (
           <div className="animate-fade-in">
             <PlanManagementPanel />
-          </div>
-        )}
-
-        {activeTab === "support" && (
-          <div className="animate-fade-in">
-            <SupportQueuePanel />
           </div>
         )}
       </div>

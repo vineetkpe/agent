@@ -5,7 +5,17 @@ import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { generateStructuredJson } from "@/lib/aiProvider";
 
 async function getSuggestedOpportunities(site: any, rankingNow: any[]): Promise<any[]> {
-  const profile = site.businessProfile ? JSON.parse(site.businessProfile) : null;
+  const manuallyEntered = site.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
+  const profile = site.businessProfile
+    ? JSON.parse(site.businessProfile)
+    : (manuallyEntered ? {
+        industry: manuallyEntered.industry,
+        category: manuallyEntered.industry,
+        summary: manuallyEntered.description,
+        services: manuallyEntered.services || [],
+        targetAudience: manuallyEntered.targetAudience,
+      } : null);
+
   const profileText = profile ? `
 Discovered Business Profile:
 - Industry: ${profile.industry}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2, ChevronUp, Search, MessageSquare } from "lucide-react";
+import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2, ChevronUp, Search, MessageSquare, Shield, Clock } from "lucide-react";
 import { TabType } from "@/hooks/useDashboardData";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -43,31 +43,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: "Workspace",
       items: [
-        { id: "overview", label: "Agent Activity", icon: <Activity className="w-4 h-4" /> },
-        { id: "performance", label: "SEO Analytics", icon: <BarChart2 className="w-4 h-4" /> },
+        { id: "overview", label: "Overview", icon: <Activity className="w-4 h-4" /> },
+        { id: "flow", label: "Agent Flow", icon: <Layers className="w-4 h-4" /> },
       ],
     },
     {
-      title: "Audit & Fix",
+      title: "Growth",
       items: [
-        { id: "crawler", label: "Site Crawler (Core)", icon: <Globe className="w-4 h-4" /> },
-        { id: "recommendations", label: "AI Recommendations", icon: <HeartPulse className="w-4 h-4" />, hasBadge: true },
-        { id: "content", label: "AI Content Suite", icon: <FileText className="w-4 h-4" /> },
+        { id: "recommendations", label: "Recommendations", icon: <HeartPulse className="w-4 h-4" />, hasBadge: true },
+        { id: "content", label: "Content", icon: <FileText className="w-4 h-4" /> },
         { id: "keywords", label: "Keyword Research", icon: <Search className="w-4 h-4" /> },
+        { id: "competitors", label: "Competitors", icon: <Shield className="w-4 h-4" /> },
+      ],
+    },
+    {
+      title: "Health",
+      items: [
+        { id: "performance", label: "Performance", icon: <BarChart2 className="w-4 h-4" /> },
+        { id: "uptime", label: "Uptime", icon: <Clock className="w-4 h-4" /> },
       ],
     },
     {
       title: "Setup",
       items: [
-        { id: "sites", label: "My Audited Sites", icon: <Layers className="w-4 h-4" /> },
-        { id: "context", label: "AI Agent Context", icon: <Database className="w-4 h-4" /> },
-        { id: "connections", label: "Connections", icon: <Settings className="w-4 h-4" /> },
-      ],
-    },
-    {
-      title: "Help & Support",
-      items: [
-        { id: "support", label: "Customer Support", icon: <MessageSquare className="w-4 h-4" /> },
+        { id: "sites", label: "Sites & Connections", icon: <Globe className="w-4 h-4" /> },
+        { id: "settings", label: "Support/Settings", icon: <Settings className="w-4 h-4" /> },
       ],
     },
   ];

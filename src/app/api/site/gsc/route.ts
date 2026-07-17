@@ -41,6 +41,8 @@ export async function POST(req: Request) {
         gscVerifiedPropertyUrl: null,
         googleRefreshTokenEncrypted: null,
         gscLastSyncedAt: null,
+        gaConnected: false,
+        gaPropertyId: null,
       },
     });
 
