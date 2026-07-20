@@ -84,7 +84,7 @@ const mockProvider: PaymentProvider = {
     return { success: true };
   },
 
-  async verifyWebhookSignature(rawBody, _signature) {
+  async verifyWebhookSignature(rawBody) {
     console.log("[Mock Payment] Verifying webhook signature (bypass)");
     try {
       return JSON.parse(rawBody);

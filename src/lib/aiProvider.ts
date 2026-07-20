@@ -3,11 +3,6 @@ import * as groqProvider from "./aiProviders/groq";
 import * as openrouterProvider from "./aiProviders/openrouter";
 import { prisma } from "./prisma";
 
-interface CachedConfig {
-  provider: string;
-  isMock: boolean;
-  resolvedAt: number;
-}
 
 export function clearCachedConfig() {
   // Config cache not implemented

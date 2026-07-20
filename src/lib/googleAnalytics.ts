@@ -1,7 +1,6 @@
 import { decrypt } from "./crypto";
-import { Site } from "@prisma/client";
 
-async function getGaAccessToken(site: Site): Promise<string> {
+async function getGaAccessToken(site: { googleRefreshTokenEncrypted?: string | null }): Promise<string> {
   if (!site.googleRefreshTokenEncrypted) {
     throw new Error("Google refresh token is missing. Please connect Google first.");
   }
@@ -90,7 +89,7 @@ export async function findMatchingGaProperty(accessToken: string, siteUrl: strin
   return null;
 }
 
-export async function fetchAnalyticsData(site: Site) {
+export async function fetchAnalyticsData(site: { gaPropertyId: string | null; googleRefreshTokenEncrypted?: string | null }) {
   if (!site.gaPropertyId) {
     throw new Error("Google Analytics property ID is missing.");
   }
@@ -207,7 +206,7 @@ export async function fetchAnalyticsData(site: Site) {
   };
 }
 
-export async function fetchDailySessions(site: Site, startDate: Date, endDate: Date): Promise<Record<string, number>> {
+export async function fetchDailySessions(site: { gaPropertyId: string | null; googleRefreshTokenEncrypted?: string | null }, startDate: Date, endDate: Date): Promise<Record<string, number>> {
   if (!site.gaPropertyId) {
     return {};
   }
