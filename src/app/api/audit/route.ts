@@ -1,84 +1,11 @@
 import { NextResponse } from "next/server";
-import { crawlSite } from "@/lib/crawler";
-import { runSeoAudits } from "@/lib/seoChecks";
-import { generateStructuredJson } from "@/lib/aiProvider";
-import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
-import { sanitizeHtml } from "@/lib/sanitizer";
 import { checkRateLimit } from "@/lib/rateLimit";
-import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
-import { validateSeoContent } from "@/lib/contentValidator";
 import { runAuditForSite } from "@/lib/runAudit";
 import { logActivity } from "@/lib/activityLog";
-
-// Define the response schema structure expected from Gemini
-const geminiResponseSchema = {
-  type: "OBJECT",
-  properties: {
-    keywordOpportunities: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          keyword: { type: "STRING" },
-          rationale: { type: "STRING" },
-          intent: { type: "STRING", enum: ["informational", "transactional"] },
-        },
-        required: ["keyword", "rationale", "intent"],
-      },
-    },
-    fixes: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          targetUrl: { type: "STRING" },
-          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link", "heading_structure", "canonical_tag", "social_meta", "duplicate_content"] },
-          suggestedValue: { type: "STRING" },
-        },
-        required: ["targetUrl", "type", "suggestedValue"],
-      },
-    },
-    blogPosts: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          title: { type: "STRING" },
-          content: { type: "STRING" },
-          metaDescription: { type: "STRING" },
-          wordCount: { type: "INTEGER" },
-          internalLinksUsed: {
-            type: "ARRAY",
-            items: { type: "STRING" }
-          },
-          externalLinksUsed: {
-            type: "ARRAY",
-            items: { type: "STRING" }
-          },
-          suggestedSchema: { type: "STRING" },
-          suggestedSlug: { type: "STRING" },
-          targetKeyword: { type: "STRING" },
-        },
-        required: [
-          "title",
-          "content",
-          "metaDescription",
-          "wordCount",
-          "internalLinksUsed",
-          "externalLinksUsed",
-          "suggestedSchema",
-          "suggestedSlug",
-          "targetKeyword"
-        ],
-      },
-    },
-  },
-  required: ["keywordOpportunities", "fixes", "blogPosts"],
-};
 
 export async function GET(req: Request) {
   try {
@@ -218,7 +145,16 @@ export async function GET(req: Request) {
       orderBy: { updatedAt: "desc" },
     });
 
-    const activityLog: any[] = [];
+    interface AuditActivityItem {
+      id: string;
+      type: string;
+      timestamp: Date;
+      title: string;
+      detail: string;
+      link?: string;
+    }
+
+    const activityLog: AuditActivityItem[] = [];
 
     // Add audits
     for (const aud of siteAudits) {
@@ -339,10 +275,10 @@ export async function GET(req: Request) {
         lastNotificationCheckAt: currentUser.lastNotificationCheckAt,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Audit Get Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load dashboard data." },
+      { error: (error as Error).message || "Failed to load dashboard data." },
       { status: 500 }
     );
   }
@@ -477,11 +413,12 @@ export async function POST(req: Request) {
       audit: completedAudit,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Audit Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Audit run failed unexpectedly." },
+      { error: (error as Error).message || "Audit run failed unexpectedly." },
       { status: 500 }
     );
   }
 }
+

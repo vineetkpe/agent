@@ -121,10 +121,11 @@ export async function GET(req: Request) {
       earliestDataAt,
       dataPoints,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Trend API Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load trend analytics." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load trend analytics." }, { status: 500 });
   }
 }
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+

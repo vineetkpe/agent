@@ -122,7 +122,7 @@ export async function POST(req: Request) {
               { status: 502 }
             );
           }
-        } catch (decryptErr: any) {
+        } catch (decryptErr) {
           console.error("[Decrypt Credentials Error]:", decryptErr);
           return NextResponse.json({ error: "Failed to decrypt WordPress credentials securely." }, { status: 500 });
         }
@@ -329,20 +329,20 @@ export async function POST(req: Request) {
               });
             }
           }
-        } catch (err: any) {
+        } catch (err) {
           console.error("[Auto-Apply Meta Error]:", err);
           const updatedItem = await prisma.auditItem.update({
             where: { id: itemId },
             data: {
               status: "approved",
-              errorMessage: `WordPress update failed: ${err.message || err}`,
+              errorMessage: `WordPress update failed: ${(err as Error).message || err}`,
             },
           });
           return NextResponse.json({
             success: true,
             status: "approved",
             item: updatedItem,
-            message: `WordPress update failed: ${err.message || err}. Copy-paste snippet instead.`,
+            message: `WordPress update failed: ${(err as Error).message || err}. Copy-paste snippet instead.`,
           });
         }
       } else {
@@ -372,11 +372,12 @@ export async function POST(req: Request) {
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Approve Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Approval execution failed unexpectedly." },
+      { error: (error as Error).message || "Approval execution failed unexpectedly." },
       { status: 500 }
     );
   }
 }
+

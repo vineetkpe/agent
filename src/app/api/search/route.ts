@@ -72,12 +72,13 @@ export async function GET(req: Request) {
       sites,
       auditItems,
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || "Failed to execute search query" },
+      { error: (error as Error).message || "Failed to execute search query" },
       { status: 500 }
     );
   }
 }
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+

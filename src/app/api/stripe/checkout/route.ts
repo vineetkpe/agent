@@ -56,11 +56,12 @@ export async function POST(req: Request) {
       success: true,
       url: session.url,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Checkout Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Could not create checkout session" },
+      { error: (error as Error).message || "Could not create checkout session" },
       { status: 500 }
     );
   }
 }
+

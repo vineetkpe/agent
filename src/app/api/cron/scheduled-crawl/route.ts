@@ -73,9 +73,9 @@ export async function GET(req: Request) {
 
             results.push({ siteId: site.id, url: site.url, success: true });
             console.log(`[Scheduled Crawl Cron] Successfully ran scheduled crawl for site ${site.url}`);
-          } catch (err: any) {
+          } catch (err) {
             console.error(`[Scheduled Crawl Cron] Failure for site ${site.url}:`, err);
-            results.push({ siteId: site.id, url: site.url, success: false, error: err.message || String(err) });
+            results.push({ siteId: site.id, url: site.url, success: false, error: (err as Error).message || String(err) });
           }
         })
       );
@@ -87,10 +87,11 @@ export async function GET(req: Request) {
       results
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Scheduled Crawl Cron Error]:", error);
-    return NextResponse.json({ error: error.message || "Scheduled crawl cron failed." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Scheduled crawl cron failed." }, { status: 500 });
   }
 }
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+

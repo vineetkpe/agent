@@ -20,8 +20,9 @@ export async function POST(req: Request) {
       success: true,
       onboardingCompletedAt: user.onboardingCompletedAt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Onboarding API Error]:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

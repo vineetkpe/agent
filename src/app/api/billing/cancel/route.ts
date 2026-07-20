@@ -68,11 +68,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Billing Cancel Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Could not process subscription cancellation" },
+      { error: (error as Error).message || "Could not process subscription cancellation" },
       { status: 500 }
     );
   }
 }
+

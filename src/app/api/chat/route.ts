@@ -9,7 +9,7 @@ import { logActivity } from "@/lib/activityLog";
 function cleanUserInput(text: string): string {
   if (typeof text !== "string") return "";
   // Strip common role indicators and injection commands to prevent format confusion
-  let cleaned = text
+  const cleaned = text
     .replace(/(?:^|\n)(?:system|assistant|user|admin|ai assistant|ai)\s*:/gi, "")
     .replace(/ignore\s+previous\s+instructions/gi, "[removed attempt]")
     .replace(/reveal\s+system\s+prompt/gi, "[removed attempt]")
@@ -46,10 +46,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const { messages, siteId } = await req.json();
-    if (!messages || !Array.isArray(messages)) {
+    interface ChatMessage {
+      role: string;
+      content: string;
+    }
+
+    const { messages: rawMessages, siteId } = await req.json();
+    if (!rawMessages || !Array.isArray(rawMessages)) {
       return NextResponse.json({ error: "Invalid chat request." }, { status: 400 });
     }
+    const messages = rawMessages as ChatMessage[];
 
     // 1. Fetch site context
     let site;
@@ -138,8 +144,8 @@ export async function POST(req: Request) {
 
     // Check latest user message
     const latestUserMsg = messages
-      .filter((m: any) => m.role === "user")
-      .map((m: any) => m.content.toLowerCase())
+      .filter((m: ChatMessage) => m.role === "user")
+      .map((m: ChatMessage) => m.content.toLowerCase())
       .pop() || "";
 
     if (suspiciousKeywords.some(kw => latestUserMsg.includes(kw))) {
@@ -156,7 +162,7 @@ export async function POST(req: Request) {
 
     // Construct the context prompt containing history
     const historyText = messages
-      .map((m: any) => {
+      .map((m: ChatMessage) => {
         const cleanedContent = m.role === "user" ? cleanUserInput(m.content) : m.content;
         if (m.role === "user") {
           return `User Message:\n<user_message>\n${cleanedContent}\n</user_message>`;
@@ -184,8 +190,8 @@ Here is the Discovered Business Intelligence Profile for this site:
 - Industry: ${businessProfile?.industry || "Unknown"}
 - Category: ${businessProfile?.category || "Unknown"}
 - Company Summary: ${businessProfile?.summary || "Unknown"}
-- Products Offered: ${businessProfile?.products ? (Array.isArray(businessProfile.products) ? businessProfile.products.map((p: any) => typeof p === "string" ? p : p.name).join(", ") : String(businessProfile.products)) : "None listed"}
-- Services Offered: ${businessProfile?.services ? (Array.isArray(businessProfile.services) ? businessProfile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ") : String(businessProfile.services)) : "None listed"}
+- Products Offered: ${businessProfile?.products ? (Array.isArray(businessProfile.products) ? businessProfile.products.map((p: string | { name: string }) => typeof p === "string" ? p : p.name).join(", ") : String(businessProfile.products)) : "None listed"}
+- Services Offered: ${businessProfile?.services ? (Array.isArray(businessProfile.services) ? businessProfile.services.map((s: string | { name: string }) => typeof s === "string" ? s : s.name).join(", ") : String(businessProfile.services)) : "None listed"}
 - Target Audience: ${businessProfile?.targetAudience || "Unknown"}
 - Brand Voice style guide: ${businessProfile?.brandVoice ? (typeof businessProfile.brandVoice === "string" ? businessProfile.brandVoice : `Tone: ${businessProfile.brandVoice.tone}, Reading Level: ${businessProfile.brandVoice.readingLevel}, Vocabulary: ${businessProfile.brandVoice.vocabularyNotes}, Avoid: ${(businessProfile.brandVoice.doNotUse || []).join(", ")}`) : "Neutral"}
 - Location Detected: ${businessProfile?.locationDetected || "Worldwide"}
@@ -221,11 +227,12 @@ Please reply to the user's latest message as the AI Assistant following the Styl
     const reply = await generateContent(systemPrompt, currentUser.id);
     return NextResponse.json({ reply });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Chat API Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to process chat request." },
+      { error: (error as Error).message || "Failed to process chat request." },
       { status: 500 }
     );
   }
 }
+

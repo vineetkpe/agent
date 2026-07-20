@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     const stripePromoCode = await stripe.promotionCodes.create({
       coupon: stripeCoupon.id,
       code: cleanCode,
-    } as any);
+    } as unknown as Stripe.PromotionCodeCreateParams);
 
     // 4. Write Audit Log
     await logAdminAction(
@@ -84,11 +84,12 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({ success: true, promotionCode: stripePromoCode });
-  } catch (error: any) {
-    if (error.name === "ForbiddenError") {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+  } catch (error) {
+    if ((error as Error).name === "ForbiddenError") {
+      return NextResponse.json({ error: (error as Error).message }, { status: 403 });
     }
     console.error("[Stripe Promotions Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to create Stripe promotion." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to create Stripe promotion." }, { status: 500 });
   }
 }
+

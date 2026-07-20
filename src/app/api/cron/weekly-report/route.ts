@@ -61,8 +61,6 @@ export async function GET(req: Request) {
 
       console.log(`[Weekly Report Cron] Compiling digest for: ${user.email}`);
 
-      let totalAuditsRunThisWeek = 0;
-      let totalFixesApprovedOrApplied = 0;
       let hasRealActivity = false;
       const siteDigests = [];
 
@@ -72,7 +70,6 @@ export async function GET(req: Request) {
         const auditsPrevWeek = site.audits.filter(a => a.createdAt >= twoWeeksAgo && a.createdAt < oneWeekAgo);
 
         const auditCount = auditsThisWeek.length;
-        totalAuditsRunThisWeek += auditCount;
 
         // Fetch audit item counts updated this week
         const itemsUpdatedThisWeek = await prisma.auditItem.findMany({
@@ -84,7 +81,6 @@ export async function GET(req: Request) {
         });
         const approvedCount = itemsUpdatedThisWeek.filter(i => i.status === "approved").length;
         const appliedCount = itemsUpdatedThisWeek.filter(i => i.status === "applied").length;
-        totalFixesApprovedOrApplied += (approvedCount + appliedCount);
 
         if (auditCount > 0 || approvedCount > 0 || appliedCount > 0) {
           hasRealActivity = true;
@@ -248,10 +244,11 @@ export async function GET(req: Request) {
       processedCount: results.length,
       results,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Weekly Report Cron Error]:", error);
-    return NextResponse.json({ error: error.message || "Weekly report cron execution failed." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Weekly report cron execution failed." }, { status: 500 });
   }
 }
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+

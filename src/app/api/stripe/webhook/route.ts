@@ -3,27 +3,28 @@ import { paymentProvider } from "@/lib/paymentProvider";
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLog";
 import { sendEmail } from "@/lib/email";
+import Stripe from "stripe";
 
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature") || "";
 
-  let event: any;
+  let event: Stripe.Event;
   try {
-    event = await paymentProvider.verifyWebhookSignature(body, signature);
-  } catch (err: any) {
-    console.error("[Webhook Error] Signature verification failed:", err.message);
+    event = (await paymentProvider.verifyWebhookSignature(body, signature)) as Stripe.Event;
+  } catch (err) {
+    console.error("[Webhook Error] Signature verification failed:", (err as Error).message);
     return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
   }
 
   // Handle events
   try {
-    const session = event.data.object as any;
+    const session = event.data.object as Stripe.Checkout.Session;
     
     if (event.type === "checkout.session.completed") {
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
-      const customerId = session.customer;
+      const customerId = typeof session.customer === "string" ? session.customer : (session.customer ? session.customer.id : null);
 
       if (!userId || !plan) {
         console.error("[Webhook Error] Missing userId or plan in session metadata:", session.metadata);
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       await logActivity(userId, "plan_upgrade", { plan, customerId });
       console.log(`[Webhook] Activated plan ${plan} for user ${userId} (Customer: ${customerId})`);
     } else if (event.type === "invoice.payment_failed") {
-      const customerId = session.customer;
+      const customerId = typeof session.customer === "string" ? session.customer : (session.customer ? session.customer.id : null);
       if (customerId) {
         const user = await prisma.user.findFirst({
           where: { stripeCustomerId: customerId },
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
         }
       }
     } else if (event.type === "customer.subscription.deleted") {
-      const customerId = session.customer;
+      const customerId = typeof session.customer === "string" ? session.customer : (session.customer ? session.customer.id : null);
       if (customerId) {
         const user = await prisma.user.findFirst({
           where: { stripeCustomerId: customerId },
@@ -121,10 +122,11 @@ export async function POST(req: Request) {
         }
       }
     }
-  } catch (dbErr: any) {
+  } catch (dbErr) {
     console.error("[Webhook Database Error]:", dbErr);
-    return NextResponse.json({ error: "Internal processing error", message: dbErr.message }, { status: 200 });
+    return NextResponse.json({ error: "Internal processing error", message: (dbErr as Error).message }, { status: 200 });
   }
 
   return NextResponse.json({ received: true });
 }
+

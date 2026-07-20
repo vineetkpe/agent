@@ -106,7 +106,8 @@ export async function GET(req: Request) {
           console.error("Failed to parse gscCachedData during export:", e);
         }
       }
-      const { gscCachedData, ...rest } = site;
+      const rest = { ...site };
+      delete (rest as { gscCachedData?: unknown }).gscCachedData;
       return {
         ...rest,
         keywordResearch,
@@ -134,11 +135,12 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json(exportData);
-  } catch (error: any) {
+  } catch (error) {
     console.error("[User Data Export Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to compile user data export" },
+      { error: (error as Error).message || "Failed to compile user data export" },
       { status: 500 }
     );
   }
 }
+

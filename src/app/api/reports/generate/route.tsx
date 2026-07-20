@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
+import { Site, Audit, AuditItem } from "@prisma/client";
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 
@@ -26,15 +27,7 @@ const styles = StyleSheet.create({
 });
 
 // PDF Document Component
-interface PdfProps {
-  site: any;
-  audit: any;
-  items: any[];
-  reportType: string;
-  range: string;
-}
-
-function renderSeoReportPdf(site: any, audit: any, items: any[], reportType: string, range: string) {
+function renderSeoReportPdf(site: Site, audit: Audit | null, items: AuditItem[], reportType: string, range: string) {
   const score = audit?.scoreSeo ?? "N/A";
   const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
@@ -185,15 +178,15 @@ export async function POST(req: Request) {
 
     const pdfBuffer = await pdf(pdfDoc).toBuffer();
 
-    return new NextResponse(pdfBuffer as any, {
+    return new NextResponse(pdfBuffer as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="heydrona-seo-report-${site.id}.pdf"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Report API Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate report" }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to generate report" }, { status: 500 });
   }
 }
 
@@ -229,7 +222,8 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ success: true, logs: formattedLogs });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to load report history" }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message || "Failed to load report history" }, { status: 500 });
   }
 }
+

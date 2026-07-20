@@ -37,7 +37,16 @@ export async function GET(req: Request) {
       take: 10,
     });
 
-    const events: any[] = [];
+    interface NotificationEvent {
+      id: string;
+      type: string;
+      timestamp: Date;
+      title: string;
+      detail: string;
+      tabLink?: string;
+    }
+
+    const events: NotificationEvent[] = [];
 
     // Map audits
     for (const aud of audits) {
@@ -109,7 +118,7 @@ export async function GET(req: Request) {
       notifications: recentEvents,
       lastNotificationCheckAt: currentUser.lastNotificationCheckAt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Notifications API Error]:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
@@ -133,8 +142,9 @@ export async function POST(req: Request) {
       success: true,
       lastNotificationCheckAt: user.lastNotificationCheckAt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Notifications Check API Error]:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

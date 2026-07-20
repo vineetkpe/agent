@@ -52,8 +52,9 @@ export async function POST(req: Request) {
         email: targetUser.email,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Impersonate Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to start impersonation session." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to start impersonation session." }, { status: 500 });
   }
 }
+

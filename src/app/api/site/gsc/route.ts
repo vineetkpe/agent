@@ -9,7 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { siteId, gscUrl, disconnect } = await req.json();
+    const { siteId, disconnect } = await req.json();
     if (!siteId) {
       return NextResponse.json({ error: "Missing siteId parameter" }, { status: 400 });
     }
@@ -55,11 +55,12 @@ export async function POST(req: Request) {
         gscUrl: updatedSite.gscUrl,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Search Console API Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
 }
+

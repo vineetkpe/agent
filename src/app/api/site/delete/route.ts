@@ -40,11 +40,12 @@ export async function POST(req: Request) {
       success: true,
       message: "Site and all historical audits successfully deleted.",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Site Delete API Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
 }
+

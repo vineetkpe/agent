@@ -5,7 +5,7 @@ import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { logActivity } from "@/lib/activityLog";
-import { crawlSite, isThinContent } from "@/lib/crawler";
+import { crawlSite, isThinContent, CrawledPage } from "@/lib/crawler";
 import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 
 export async function POST(req: Request) {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     // Run crawler & check content quality
     let isThin = true;
     let businessProfileData = null;
-    let pages: any[] = [];
+    let pages: CrawledPage[] = [];
     try {
       const crawlResult = await crawlSite(cleanUrl, 5); // cap at 5 pages for onboarding scan speed
       pages = crawlResult.pages;
@@ -113,11 +113,12 @@ export async function POST(req: Request) {
       site,
       isThin,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Site Create API Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
 }
+

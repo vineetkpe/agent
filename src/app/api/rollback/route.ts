@@ -156,11 +156,12 @@ export async function POST(req: Request) {
       item: updatedItem,
       message: "Successfully reverted change on live CMS site!",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Rollback Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Rollback execution failed unexpectedly." },
+      { error: (error as Error).message || "Rollback execution failed unexpectedly." },
       { status: 500 }
     );
   }
 }
+

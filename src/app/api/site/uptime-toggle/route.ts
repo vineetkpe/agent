@@ -32,7 +32,8 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, site: updated });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Toggle failed." }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message || "Toggle failed." }, { status: 500 });
   }
 }
+

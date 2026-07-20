@@ -263,8 +263,9 @@ export async function GET(req: Request) {
         role: currentUser.role,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Stats Error]:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

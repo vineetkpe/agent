@@ -43,9 +43,9 @@ export async function POST(
     }
 
     return NextResponse.json({ success: true, message: "Audit cooldown bypassed/reset successfully." });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Site Action Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to process site action." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to process site action." }, { status: 500 });
   }
 }
 
@@ -76,8 +76,8 @@ export async function DELETE(
     console.log(`[AUDIT TRAIL] Admin ${currentUser.email} deleted Site ${site.url} (ID: ${siteId}).`);
 
     return NextResponse.json({ success: true, message: "Site deleted successfully." });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Site DELETE Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete site." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to delete site." }, { status: 500 });
   }
 }

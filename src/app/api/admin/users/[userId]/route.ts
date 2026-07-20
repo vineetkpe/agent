@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { User } from "@prisma/client";
 import { getCurrentUser } from "@/lib/user";
 
 export async function GET(
@@ -58,9 +59,9 @@ export async function GET(
       apiUsageCount,
       recentAuditItems,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin User Detail GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load user details." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load user details." }, { status: 500 });
   }
 }
 
@@ -85,7 +86,7 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const updateData: any = {};
+    const updateData: Partial<User> = {};
     let auditLogMessage = "";
 
     if (body.action === "deactivate_subscription") {
@@ -126,9 +127,9 @@ export async function PATCH(
     console.log(`[AUDIT TRAIL] Admin ${currentUser.email} modified User ${targetUser.email} (ID: ${userId}). Changes: ${auditLogMessage}`);
 
     return NextResponse.json({ success: true, user: updatedUser });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin User PATCH Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to update user settings." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to update user settings." }, { status: 500 });
   }
 }
 
@@ -163,8 +164,8 @@ export async function DELETE(
     console.log(`[AUDIT TRAIL] Admin ${currentUser.email} deleted User ${targetUser.email} (ID: ${userId}) cascade successfully.`);
 
     return NextResponse.json({ success: true, message: "User deleted successfully." });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin User DELETE Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete user." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to delete user." }, { status: 500 });
   }
 }

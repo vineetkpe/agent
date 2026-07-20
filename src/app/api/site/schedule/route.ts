@@ -29,8 +29,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, site: updatedSite });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Save Schedule Settings Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to save schedule settings." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to save schedule settings." }, { status: 500 });
   }
 }
+

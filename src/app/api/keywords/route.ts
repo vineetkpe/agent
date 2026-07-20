@@ -3,9 +3,43 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { generateStructuredJson } from "@/lib/aiProvider";
-import { crawlSite } from "@/lib/crawler";
+import { crawlSite, CrawledPage } from "@/lib/crawler";
+import { Site } from "@prisma/client";
 
-async function getSuggestedOpportunities(site: any, rankingNow: any[]): Promise<any[]> {
+interface RankingQuery {
+  query: string;
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+}
+
+interface SuggestedOpportunity {
+  keyword: string;
+  intent: string;
+  rationale: string;
+}
+
+interface StuffingIssue {
+  pageUrl: string;
+  keyword: string;
+  density: number;
+  wordCount: number;
+}
+
+interface CannibalizationIssue {
+  keyword: string;
+  urls: string[];
+}
+
+interface GapIssue {
+  query: string;
+  impressions: number;
+  clicks: number;
+  position?: number;
+}
+
+async function getSuggestedOpportunities(site: Site, rankingNow: RankingQuery[]): Promise<SuggestedOpportunity[]> {
   const manuallyEntered = site.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
   const profile = site.businessProfile
     ? JSON.parse(site.businessProfile)
@@ -18,7 +52,7 @@ async function getSuggestedOpportunities(site: any, rankingNow: any[]): Promise<
       } : null);
 
   const servicesList = profile?.services
-    ? (Array.isArray(profile.services) ? profile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services))
+    ? (Array.isArray(profile.services) ? profile.services.map((s: string | { name: string }) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services))
     : "None listed";
 
   const profileText = profile ? `
@@ -31,7 +65,7 @@ Discovered Business Profile:
 ` : "No explicit business profile discovered yet.";
 
   const seedKeywordsText = rankingNow && rankingNow.length > 0
-    ? `Here are top search queries currently ranking for this website: ${rankingNow.map((k: any) => `"${k.query}"`).slice(0, 15).join(", ")}`
+    ? `Here are top search queries currently ranking for this website: ${rankingNow.map((k: RankingQuery) => `"${k.query}"`).slice(0, 15).join(", ")}`
     : "No Search Console ranking queries available.";
 
   const businessGoalsList = site.businessGoals ? JSON.parse(site.businessGoals) : [];
@@ -86,7 +120,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
   };
 
   try {
-    const aiResponse = await generateStructuredJson<{ suggestions: any[] }>(
+    const aiResponse = await generateStructuredJson<{ suggestions: SuggestedOpportunity[] }>(
       systemPrompt,
       responseSchema,
       site.userId
@@ -122,8 +156,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
-    let rankingNow: any[] = [];
-    let suggestedOpportunities: any[] = [];
+    let rankingNow: RankingQuery[] = [];
+    let suggestedOpportunities: SuggestedOpportunity[] = [];
 
     // Check GSC connection
     if (site.gscConnected) {
@@ -136,11 +170,13 @@ export async function GET(req: Request) {
     }
 
     // Load AI suggestions from cache or generate new ones
-    let cacheData: any = null;
+    let cacheData: { rankingNow?: RankingQuery[]; suggestedOpportunities?: SuggestedOpportunity[] } | null = null;
     if (site.gscCachedData) {
       try {
         cacheData = JSON.parse(site.gscCachedData);
-      } catch (e) {}
+      } catch {
+        cacheData = null;
+      }
     }
 
     const cacheAgeMs = Date.now() - (site.gscLastSyncedAt ? new Date(site.gscLastSyncedAt).getTime() : 0);
@@ -168,7 +204,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" }
     });
 
-    let pages: any[] = [];
+    let pages: CrawledPage[] = [];
     try {
       const crawlResult = await crawlSite(site.url, 5);
       pages = crawlResult?.pages || [];
@@ -176,16 +212,16 @@ export async function GET(req: Request) {
       console.error("[Keywords API] Crawl failed during keyword analysis:", crawlErr);
     }
 
-    const stuffingIssues: any[] = [];
-    const cannibalizationIssues: any[] = [];
-    const gapIssues: any[] = [];
+    const stuffingIssues: StuffingIssue[] = [];
+    const cannibalizationIssues: CannibalizationIssue[] = [];
+    const gapIssues: GapIssue[] = [];
 
     if (pages.length > 0) {
       const targetKeywords = new Set<string>();
-      suggestedOpportunities.forEach((opp: any) => {
+      suggestedOpportunities.forEach((opp: SuggestedOpportunity) => {
         if (opp.keyword) targetKeywords.add(opp.keyword.toLowerCase().trim());
       });
-      rankingNow.forEach((rank: any) => {
+      rankingNow.forEach((rank: RankingQuery) => {
         if (rank.query) targetKeywords.add(rank.query.toLowerCase().trim());
       });
 
@@ -240,7 +276,7 @@ export async function GET(req: Request) {
         const competingPages: string[] = [];
         for (const page of pages) {
           const titleMatch = page.title?.toLowerCase().includes(kw);
-          const h1Match = page.headings?.some((h: any) => h.level === "h1" && h.text.toLowerCase().includes(kw));
+          const h1Match = page.headings?.some((h: { level: string; text: string }) => h.level === "h1" && h.text.toLowerCase().includes(kw));
           const metaMatch = page.metaDescription?.toLowerCase().includes(kw);
           if (titleMatch || h1Match || metaMatch) {
             competingPages.push(page.url);
@@ -295,7 +331,7 @@ export async function GET(req: Request) {
             let targeted = false;
             for (const page of pages) {
               const inTitle = page.title?.toLowerCase().includes(query);
-              const inH1 = page.headings?.some((h: any) => h.level === "h1" && h.text.toLowerCase().includes(query));
+              const inH1 = page.headings?.some((h: { level: string; text: string }) => h.level === "h1" && h.text.toLowerCase().includes(query));
               if (inTitle || inH1) {
                 targeted = true;
                 break;
@@ -359,9 +395,9 @@ export async function GET(req: Request) {
       cannibalizationIssues,
       gapIssues
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Keywords API Error]:", error);
-    return NextResponse.json({ error: error.message || "An unexpected error occurred." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "An unexpected error occurred." }, { status: 500 });
   }
 }
 
@@ -392,3 +428,4 @@ function calculateKeywordDensity(text: string, keyword: string): number {
 
   return parseFloat(((matchCount * keywordWords.length) / totalWords * 100).toFixed(2));
 }
+

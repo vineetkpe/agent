@@ -38,11 +38,12 @@ export async function GET(req: Request) {
     authUrl.searchParams.set("state", encryptedState);
 
     return NextResponse.redirect(authUrl.toString());
-  } catch (error: any) {
+  } catch (error) {
     console.error("[GSC Connect Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
 }
+

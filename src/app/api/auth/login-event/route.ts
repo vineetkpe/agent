@@ -11,8 +11,9 @@ export async function POST(req: Request) {
 
     await logActivity(currentUser.id, "login", { method: "web_session" }, req);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Login Event API Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to log login event." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to log login event." }, { status: 500 });
   }
 }
+

@@ -27,7 +27,7 @@ function getPossibleGscProperties(siteUrl: string): string[] {
       `http://www.${cleanHost}/`,
       `http://www.${cleanHost}`
     ];
-  } catch (e) {
+  } catch {
     return [siteUrl];
   }
 }
@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     try {
       const decrypted = decrypt(state);
       statePayload = JSON.parse(decrypted);
-    } catch (e) {
+    } catch {
       return NextResponse.redirect(`${appUrl}/dashboard?tab=connections&error=Invalid OAuth state parameter.`);
     }
 
@@ -127,7 +127,7 @@ export async function GET(req: Request) {
     const siteEntry = sitesData.siteEntry || [];
 
     const candidates = getPossibleGscProperties(site.url);
-    const matchedProperty = siteEntry.find((entry: any) => {
+    const matchedProperty = siteEntry.find((entry: { siteUrl: string; permissionLevel: string }) => {
       const entryUrl = entry.siteUrl.toLowerCase().replace(/\/$/, "");
       return candidates.some((cand) => cand.toLowerCase().replace(/\/$/, "") === entryUrl) &&
              entry.permissionLevel !== "siteUnverified";
@@ -168,10 +168,11 @@ export async function GET(req: Request) {
     return NextResponse.redirect(
       `${appUrl}/dashboard?tab=connections&success=${encodeURIComponent(successMsg)}`
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("[GSC Callback Error]:", error);
     return NextResponse.redirect(
-      `${appUrl}/dashboard?tab=connections&error=${encodeURIComponent(error.message || "An unexpected callback error occurred.")}`
+      `${appUrl}/dashboard?tab=connections&error=${encodeURIComponent((error as Error).message || "An unexpected callback error occurred.")}`
     );
   }
 }
+

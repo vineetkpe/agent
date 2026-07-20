@@ -59,8 +59,6 @@ export async function GET(req: Request) {
 
       console.log(`[Monthly Report Cron] Compiling digest for: ${user.email}`);
 
-      let totalAuditsRunThisMonth = 0;
-      let totalFixesApprovedOrApplied = 0;
       let hasRealActivity = false;
       const siteDigests = [];
 
@@ -70,7 +68,6 @@ export async function GET(req: Request) {
         const auditsPrevMonth = site.audits.filter(a => a.createdAt >= twoMonthsAgo && a.createdAt < oneMonthAgo);
 
         const auditCount = auditsThisMonth.length;
-        totalAuditsRunThisMonth += auditCount;
 
         // Fetch audit item counts updated this month
         const itemsUpdatedThisMonth = await prisma.auditItem.findMany({
@@ -82,7 +79,6 @@ export async function GET(req: Request) {
         });
         const approvedCount = itemsUpdatedThisMonth.filter(i => i.status === "approved").length;
         const appliedCount = itemsUpdatedThisMonth.filter(i => i.status === "applied").length;
-        totalFixesApprovedOrApplied += (approvedCount + appliedCount);
 
         if (auditCount > 0 || approvedCount > 0 || appliedCount > 0) {
           hasRealActivity = true;
@@ -246,10 +242,11 @@ export async function GET(req: Request) {
       processedCount: results.length,
       results,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Monthly Report Cron Error]:", error);
-    return NextResponse.json({ error: error.message || "Monthly report cron execution failed." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Monthly report cron execution failed." }, { status: 500 });
   }
 }
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+

@@ -61,9 +61,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, feedback });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Feedback POST Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to submit feedback." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to submit feedback." }, { status: 500 });
   }
 }
 
@@ -92,9 +92,9 @@ export async function GET(req: Request) {
     }));
 
     return NextResponse.json({ success: true, feedback: enriched });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Feedback GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load feedbacks." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load feedbacks." }, { status: 500 });
   }
 }
 
@@ -121,8 +121,9 @@ export async function PATCH(req: Request) {
     await logActivity(currentUser.id, "admin_action", { action: `feedback_status_${status}`, feedbackId }, req);
 
     return NextResponse.json({ success: true, feedback: updated });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Feedback PATCH Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to update feedback status." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to update feedback status." }, { status: 500 });
   }
 }
+

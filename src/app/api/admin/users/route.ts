@@ -70,8 +70,9 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ users: result });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Users List Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch users." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to fetch users." }, { status: 500 });
   }
 }
+

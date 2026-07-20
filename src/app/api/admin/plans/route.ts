@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { requireRole, logAdminAction } from "@/lib/permissions";
 import { invalidatePlanLimitsCache } from "@/lib/planLimits";
+import { Plan } from "@prisma/client";
 
 export async function GET(req: Request) {
   try {
@@ -23,11 +24,11 @@ export async function GET(req: Request) {
     const features = await prisma.feature.findMany();
 
     return NextResponse.json({ plans, features });
-  } catch (error: any) {
-    if (error.name === "ForbiddenError") {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+  } catch (error) {
+    if ((error as Error).name === "ForbiddenError") {
+      return NextResponse.json({ error: (error as Error).message }, { status: 403 });
     }
-    return NextResponse.json({ error: error.message || "Failed to load plans." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load plans." }, { status: 500 });
   }
 }
 
@@ -91,11 +92,11 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({ success: true, plan: createdPlan });
-  } catch (error: any) {
-    if (error.name === "ForbiddenError") {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+  } catch (error) {
+    if ((error as Error).name === "ForbiddenError") {
+      return NextResponse.json({ error: (error as Error).message }, { status: 403 });
     }
-    return NextResponse.json({ error: error.message || "Failed to create plan." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to create plan." }, { status: 500 });
   }
 }
 
@@ -123,7 +124,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Plan not found" }, { status: 404 });
     }
 
-    const updateData: any = {};
+    const updateData: Partial<Plan> = {};
     if (name !== undefined) updateData.name = name;
     if (monthlyPriceCents !== undefined) updateData.monthlyPriceCents = parseInt(monthlyPriceCents, 10);
     if (annualPriceCents !== undefined) updateData.annualPriceCents = annualPriceCents !== "" && annualPriceCents !== null ? parseInt(annualPriceCents, 10) : null;
@@ -168,10 +169,11 @@ export async function PATCH(req: Request) {
     );
 
     return NextResponse.json({ success: true, plan: updatedPlan });
-  } catch (error: any) {
-    if (error.name === "ForbiddenError") {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+  } catch (error) {
+    if ((error as Error).name === "ForbiddenError") {
+      return NextResponse.json({ error: (error as Error).message }, { status: 403 });
     }
-    return NextResponse.json({ error: error.message || "Failed to update plan." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to update plan." }, { status: 500 });
   }
 }
+

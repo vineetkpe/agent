@@ -2,9 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { generateStructuredJson } from "@/lib/aiProvider";
-import { crawlSite } from "@/lib/crawler";
-import { runSeoAudits, getPageSpeedData } from "@/lib/seoChecks";
+import { crawlSite, CrawledPage } from "@/lib/crawler";
+import { getPageSpeedData } from "@/lib/seoChecks";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
+import { Site } from "@prisma/client";
+
+interface Competitor {
+  url: string;
+  name: string;
+}
+
+interface CompetitorEntry {
+  url: string;
+  name: string;
+  status: string;
+  scanResult?: {
+    pageSpeedScore: number | null;
+    averageWordCount: number;
+    headingCount: number;
+    metaDescriptionPresent: boolean;
+    titlePattern: string;
+    metaPattern: string;
+    scannedAt: string | Date;
+  } | null;
+}
 
 const suggestedCompetitorSchema = {
   type: "OBJECT",
@@ -24,7 +45,7 @@ const suggestedCompetitorSchema = {
   required: ["competitors"]
 };
 
-async function suggestCompetitors(site: any): Promise<any[]> {
+async function suggestCompetitors(site: Site): Promise<Competitor[]> {
   const manuallyEntered = site.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
   const profile = site.businessProfile
     ? JSON.parse(site.businessProfile)
@@ -50,7 +71,7 @@ We need to identify 3-5 direct local or industry competitors for this business:
 - Industry: ${profile.industry}
 - Category: ${profile.category}
 - Summary: ${profile.summary}
-- Services Offered: ${profile.services ? (Array.isArray(profile.services) ? profile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services)) : "None listed"}
+- Services Offered: ${profile.services ? (Array.isArray(profile.services) ? profile.services.map((s: string | { name: string }) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services)) : "None listed"}
 - Target Audience: ${profile.targetAudience}
 
 Please suggest 3-5 actual competitor domain URLs and their business names. Ground your suggestions in the location or category of this business. Do not suggest dominant global brands (like Amazon or Google) unless they are direct competitors.
@@ -63,7 +84,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 `;
 
   try {
-    const response = await generateStructuredJson<{ competitors: any[] }>(
+    const response = await generateStructuredJson<{ competitors: Competitor[] }>(
       prompt,
       suggestedCompetitorSchema,
       site.userId
@@ -99,11 +120,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
-    let competitors: any[] = [];
+    let competitors: CompetitorEntry[] = [];
     if (site.competitorsJson) {
       try {
         competitors = JSON.parse(site.competitorsJson);
-      } catch (e) {
+      } catch {
         competitors = [];
       }
     }
@@ -128,9 +149,9 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ success: true, competitors });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Competitors GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load competitors." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load competitors." }, { status: 500 });
   }
 }
 
@@ -154,11 +175,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
-    let competitors: any[] = [];
+    let competitors: CompetitorEntry[] = [];
     if (site.competitorsJson) {
       try {
         competitors = JSON.parse(site.competitorsJson);
-      } catch (e) {}
+      } catch {
+        competitors = [];
+      }
     }
 
     if (action === "update") {
@@ -193,7 +216,7 @@ export async function POST(req: Request) {
       // Run lightweight crawl (3 pages) & SEO / PageSpeed scan
       console.log(`[Competitor Scan] Starting technical comparative scan for: ${cleanCompUrl}`);
       
-      let pages: any[] = [];
+      let pages: CrawledPage[] = [];
       let pageSpeedScore = null;
       let averageWordCount = 0;
       let headingCount = 0;
@@ -266,8 +289,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Competitors POST Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to execute competitor action." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to execute competitor action." }, { status: 500 });
   }
 }
+

@@ -38,10 +38,10 @@ export async function POST(
       message: "Business goals saved successfully!",
       site: updatedSite,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Save Site Goals Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }

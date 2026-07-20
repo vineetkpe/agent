@@ -114,11 +114,12 @@ export async function POST(req: Request) {
       message: "WordPress site connected successfully!",
       siteId: site.id,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[WordPress Connect Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "An unexpected error occurred." },
+      { error: (error as Error).message || "An unexpected error occurred." },
       { status: 500 }
     );
   }
 }
+

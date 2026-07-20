@@ -45,9 +45,9 @@ export async function GET(req: Request) {
         rawDbSettings: settings || null,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Settings GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load admin settings." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load admin settings." }, { status: 500 });
   }
 }
 
@@ -87,8 +87,9 @@ export async function PATCH(req: Request) {
     clearCachedConfig();
 
     return NextResponse.json({ success: true, settings });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Settings PATCH Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to save settings." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to save settings." }, { status: 500 });
   }
 }
+

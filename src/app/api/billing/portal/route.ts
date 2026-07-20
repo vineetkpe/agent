@@ -14,11 +14,12 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Billing Portal Route Error]:", error);
     return NextResponse.json(
-      { error: error.message || "Could not retrieve billing portal URL" },
+      { error: (error as Error).message || "Could not retrieve billing portal URL" },
       { status: 500 }
     );
   }
 }
+

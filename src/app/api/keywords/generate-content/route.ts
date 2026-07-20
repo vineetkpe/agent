@@ -82,7 +82,16 @@ Strict SEO Content Generation Rules:
 
     console.log(`[AI Content Gen] Running structured article generation for keyword: "${keyword}" (${keywordType})`);
     
-    const aiResult = await generateStructuredJson<any>(
+    interface GeneratedArticle {
+      title: string;
+      content: string;
+      metaDescription: string;
+      wordCount: number;
+      suggestedSlug: string;
+      targetKeyword: string;
+    }
+
+    const aiResult = await generateStructuredJson<GeneratedArticle>(
       prompt,
       articleResponseSchema,
       currentUser.id
@@ -189,8 +198,9 @@ Strict SEO Content Generation Rules:
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Keywords Content Generation Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate SEO article." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to generate SEO article." }, { status: 500 });
   }
 }
+

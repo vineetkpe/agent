@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
+import { Prisma } from "@prisma/client";
 
 export async function GET(req: Request) {
   try {
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
     }
 
     // 2. Build where filter
-    const whereClause: any = {};
+    const whereClause: Prisma.UserActivityLogWhereInput = {};
 
     if (userIdsFilter !== undefined) {
       whereClause.userId = { in: userIdsFilter };
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
       if (log.metadata) {
         try {
           parsedMeta = typeof log.metadata === "string" ? JSON.parse(log.metadata) : log.metadata;
-        } catch (e) {
+        } catch {
           parsedMeta = log.metadata;
         }
       }
@@ -114,8 +115,9 @@ export async function GET(req: Request) {
       logs: enrichedLogs,
       suspiciousUsers: suspiciousUsersList,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Admin Activity Log GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Failed to load activity logs." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Failed to load activity logs." }, { status: 500 });
   }
 }
+

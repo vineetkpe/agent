@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { Site, User } from "@prisma/client";
 
 async function sendEmail(to: string, subject: string, htmlContent: string) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -85,18 +86,20 @@ async function pingSite(url: string): Promise<{ isUp: boolean; responseTimeMs: n
       statusCode: res.status,
       errorMessage: isUp ? null : `HTTP status code: ${res.status}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     const duration = Date.now() - startTime;
     return {
       isUp: false,
       responseTimeMs: duration,
       statusCode: null,
-      errorMessage: err.name === "AbortError" ? "Request timed out after 10 seconds" : err.message || String(err),
+      errorMessage: (err as Error).name === "AbortError" ? "Request timed out after 10 seconds" : (err as Error).message || String(err),
     };
   }
 }
 
-async function processInBatches(sites: any[], batchSize: number, processor: (site: any) => Promise<void>) {
+type SiteWithOwner = Site & { user: User };
+
+async function processInBatches(sites: SiteWithOwner[], batchSize: number, processor: (site: SiteWithOwner) => Promise<void>) {
   for (let i = 0; i < sites.length; i += batchSize) {
     const batch = sites.slice(i, i + batchSize);
     await Promise.all(batch.map(processor));
@@ -234,8 +237,9 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ success: true, checkedCount: eligibleSites.length });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Uptime Cron Error]:", error);
-    return NextResponse.json({ error: error.message || "Uptime check cron failed." }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "Uptime check cron failed." }, { status: 500 });
   }
 }
+
