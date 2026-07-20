@@ -12,6 +12,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { validateSeoContent } from "@/lib/contentValidator";
 import { runAuditForSite } from "@/lib/runAudit";
+import { logActivity } from "@/lib/activityLog";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -293,16 +294,45 @@ export async function GET(req: Request) {
       take: 1000,
     }) : [];
 
+    const allUserAuditItems = await prisma.auditItem.findMany({
+      where: {
+        site: {
+          userId: currentUser.id
+        }
+      },
+      include: {
+        site: {
+          select: { url: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    let gaData = null;
+    if (site && site.gaConnected && site.gaPropertyId) {
+      try {
+        const { fetchAnalyticsData } = await import("@/lib/googleAnalytics");
+        gaData = await fetchAnalyticsData(site);
+      } catch (err) {
+        console.error("[Audit Route] Failed to fetch GA4 analytics data:", err);
+      }
+    }
+
     return NextResponse.json({
       site,
       audit: latestAudit,
       pastAudits,
       allSites,
+      allUserAuditItems,
+      gaData,
       activityLog,
       uptimeChecks,
       user: {
+        id: currentUser.id,
         email: currentUser.email,
+        name: currentUser.name,
         subscriptionActive: currentUser.subscriptionActive,
+        subscriptionEndsAt: currentUser.subscriptionEndsAt,
         isAdmin: currentUser.isAdmin,
         plan: currentUser.plan,
         onboardingCompletedAt: currentUser.onboardingCompletedAt,
@@ -435,6 +465,9 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    // Log the audit run event
+    await logActivity(currentUser.id, "audit_run", { siteId: site.id, targetKeyword }, req);
 
     // Call the extracted reusable pipeline
     const completedAudit = await runAuditForSite(site, { targetKeyword });

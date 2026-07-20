@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowRight, Activity, Lock, Mail, CheckCircle } from "lucide-react";
+import { Sparkles, ArrowRight, Activity, Lock, Mail, CheckCircle, User } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function SignupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,7 +16,7 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || !confirmPassword) {
+    if (!name.trim() || !email || !password || !confirmPassword) {
       setErrorMsg("All fields are required.");
       return;
     }
@@ -34,6 +35,9 @@ export default function SignupPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/login`,
+          data: {
+            name: name.trim(),
+          },
         },
       });
 
@@ -89,6 +93,23 @@ export default function SignupPage() {
           </div>
         ) : (
           <form onSubmit={handleSignup} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block font-mono">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-zinc-950 text-sm focus:outline-none focus:border-violet-500 bg-white text-zinc-850 placeholder-zinc-400 transition-colors"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block font-mono">
                 Email Address

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2, ChevronUp, Search, MessageSquare, Shield, Clock } from "lucide-react";
+import { Sparkles, Globe, Settings, HeartPulse, FileText, Activity, LogOut, X, Menu, Layers, Database, BarChart2, ChevronUp, Search, MessageSquare, Shield, Clock, HelpCircle, CheckCircle, Printer } from "lucide-react";
 import { TabType } from "@/hooks/useDashboardData";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -50,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: "Growth",
       items: [
+        { id: "tasks", label: "Tasks", icon: <CheckCircle className="w-4 h-4" /> },
         { id: "recommendations", label: "Recommendations", icon: <HeartPulse className="w-4 h-4" />, hasBadge: true },
         { id: "content", label: "Content", icon: <FileText className="w-4 h-4" /> },
         { id: "keywords", label: "Keyword Research", icon: <Search className="w-4 h-4" /> },
@@ -61,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: "performance", label: "Performance", icon: <BarChart2 className="w-4 h-4" /> },
         { id: "uptime", label: "Uptime", icon: <Clock className="w-4 h-4" /> },
+        { id: "reports", label: "Reports", icon: <Printer className="w-4 h-4" /> },
       ],
     },
     {
@@ -68,6 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: "sites", label: "Sites & Connections", icon: <Globe className="w-4 h-4" /> },
         { id: "settings", label: "Support/Settings", icon: <Settings className="w-4 h-4" /> },
+        { id: "feedback", label: "Feedback/Bug Report", icon: <MessageSquare className="w-4 h-4" /> },
+        { id: "help", label: "Help Center", icon: <HelpCircle className="w-4 h-4" />, href: "/help" },
       ],
     },
   ];
@@ -115,10 +119,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {sec.title}
               </span>
               {sec.items.map((item) => {
-                const isRecs = item.hasBadge;
+                const isRecs = (item as any).hasBadge;
                 const pendingCount = isRecs && currentAudit?.items
                   ? currentAudit.items.filter((i: any) => i.status === "pending").length
                   : 0;
+
+                if ((item as any).href) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={(item as any).href}
+                      target="_blank"
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 border text-zinc-550 hover:bg-zinc-100 hover:text-zinc-900 border-transparent"
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </div>
+                    </Link>
+                  );
+                }
 
                 return (
                   <button

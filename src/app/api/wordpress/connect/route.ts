@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { logActivity } from "@/lib/activityLog";
 
 export async function POST(req: Request) {
   try {
@@ -105,6 +106,8 @@ export async function POST(req: Request) {
         },
       });
     }
+
+    await logActivity(currentUser.id, "wp_connect", { siteId: site.id, wpUrl: normalizedWpUrl }, req);
 
     return NextResponse.json({
       success: true,

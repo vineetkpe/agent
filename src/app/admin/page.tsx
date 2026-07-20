@@ -14,6 +14,7 @@ import { AppSettingsPanel } from "@/components/admin/AppSettingsPanel";
 import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
 import { SiteManagementPanel } from "@/components/admin/SiteManagementPanel";
 import { PlanManagementPanel } from "@/components/admin/PlanManagementPanel";
+import { ActivityFeedbackPanel } from "@/components/admin/ActivityFeedbackPanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans" | "activity">("overview");
 
   const fetchStats = async () => {
     try {
@@ -193,6 +194,14 @@ export default function AdminPage() {
               Plans
             </button>
             <button
+              onClick={() => setActiveTab("activity")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "activity" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Logs & Feedback
+            </button>
+            <button
               onClick={() => setActiveTab("settings")}
               className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "settings" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
@@ -253,6 +262,12 @@ export default function AdminPage() {
         {activeTab === "settings" && (
           <div className="animate-fade-in">
             <AppSettingsPanel />
+          </div>
+        )}
+
+        {activeTab === "activity" && (
+          <div className="animate-fade-in">
+            <ActivityFeedbackPanel />
           </div>
         )}
 

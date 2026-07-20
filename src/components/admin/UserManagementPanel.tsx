@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 interface UserEntry {
   id: string;
   email: string;
+  name?: string | null;
   subscriptionActive: boolean;
   suspended: boolean;
   isAdmin: boolean;
@@ -385,7 +386,12 @@ export const UserManagementPanel: React.FC = () => {
                           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                       </td>
-                      <td className="p-4 font-bold text-zinc-900 break-all">{user.email}</td>
+                      <td className="p-4 break-all">
+                        <div className="font-bold text-zinc-900">{user.email}</div>
+                        {user.name && (
+                          <div className="text-[10px] text-zinc-400 font-normal mt-0.5">{user.name}</div>
+                        )}
+                      </td>
                       <td className="p-4 space-y-1">
                         <div className="flex flex-wrap gap-1.5">
                           {user.isAdmin && (

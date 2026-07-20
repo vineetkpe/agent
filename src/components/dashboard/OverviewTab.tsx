@@ -9,6 +9,7 @@ import { ApprovalFunnelChart } from "./charts/ApprovalFunnelChart";
 import { AgentActivityLog } from "./AgentActivityLog";
 import { UptimeWidget } from "./UptimeWidget";
 import { GrowthTrendChart } from "./charts/GrowthTrendChart";
+import { calculateSeoHealthScore, calculateGrowthScore } from "@/lib/scoreCalculator";
 
 interface OverviewTabProps {
   currentSite: any;
@@ -18,6 +19,7 @@ interface OverviewTabProps {
   activityLog?: any[];
   uptimeChecks?: any[];
   currentUser?: any;
+  gaData?: any;
   onRefresh?: () => void;
 }
 
@@ -29,6 +31,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   activityLog = [],
   uptimeChecks = [],
   currentUser,
+  gaData,
   onRefresh,
 }) => {
   if (!currentAudit) {
@@ -66,7 +69,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               </div>
               <div className="flex justify-center">
                 <button
-                  onClick={() => selectTab("crawler")}
+                   onClick={() => selectTab("crawler")}
                   type="button"
                   className="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm tracking-wider uppercase transition-all duration-200 border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_rgba(9,9,11,1)] flex items-center gap-2"
                 >
@@ -94,6 +97,26 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const pendingCount = items.filter((i: any) => i.status === "pending").length;
   const approvedCount = items.filter((i: any) => i.status === "approved").length;
   const appliedCount = items.filter((i: any) => i.status === "applied").length;
+
+  const seoHealthScore = calculateSeoHealthScore(currentAudit);
+  const previousAudit = pastAudits.length > 1 ? pastAudits[1] : null;
+
+  // Calculate clicks trend if GSC is connected
+  let clicksChange = 0;
+  if (currentSite?.gscConnected && currentAudit?.gscSnapshot) {
+    try {
+      const currentSnapshot = JSON.parse(currentAudit.gscSnapshot);
+      const prevSnapshot = previousAudit?.gscSnapshot ? JSON.parse(previousAudit.gscSnapshot) : null;
+      if (Array.isArray(currentSnapshot)) {
+        const currentClicks = currentSnapshot.reduce((sum: number, item: any) => sum + (item.clicks || 0), 0);
+        const prevClicks = Array.isArray(prevSnapshot) ? prevSnapshot.reduce((sum: number, item: any) => sum + (item.clicks || 0), 0) : 0;
+        clicksChange = currentClicks - prevClicks;
+      }
+    } catch (e) {
+      console.error("[OverviewTab] Failed to parse clicks for growth score calculation:", e);
+    }
+  }
+  const growthTrend = calculateGrowthScore(currentAudit, previousAudit, { clicksChange });
 
   // Sorting recent activity changes
   const activityItems = [...items]
@@ -129,6 +152,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const clsInfo = getClsInfo(currentAudit?.clsScore);
   const inpInfo = getInpInfo(currentAudit?.inpMilliseconds);
 
+  const indexabilityIssuesCount = items.filter((i: any) => i.type === "indexability_issue").length;
+
   return (
     <div className="space-y-8 animate-slide-up">
       {/* Domain Quick Overview Card */}
@@ -157,12 +182,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       </Card>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-4">
         <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            Total Issues Found
+            Total Issues
           </span>
-          <span className="text-2xl font-extrabold text-indigo-650 mt-1 font-mono">
+          <span className="text-2xl font-extrabold text-indigo-655 mt-1 font-mono">
             {items.length}
           </span>
         </Card>
@@ -187,19 +212,25 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            SEO Score
+            Health Score
           </span>
-          <span className="text-2xl font-extrabold text-violet-650 mt-1 font-mono">
-            {currentAudit?.scoreSeo ? `${currentAudit.scoreSeo}%` : "--"}
+          <span className="text-2xl font-extrabold text-violet-655 mt-1 font-mono">
+            {seoHealthScore}%
           </span>
         </Card>
 
         <Card variant="flat" className="flex flex-col p-4 justify-between">
           <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
-            Performance Score
+            Growth Score
           </span>
-          <span className="text-2xl font-extrabold text-emerald-600 mt-1 font-mono">
-            {currentAudit?.scorePerformance ? `${currentAudit.scorePerformance}` : "--"}
+          <span className={`text-2xl font-extrabold mt-1 font-mono uppercase ${
+            growthTrend === "positive" 
+              ? "text-emerald-650" 
+              : growthTrend === "negative" 
+              ? "text-rose-600" 
+              : "text-zinc-500"
+          }`}>
+            {growthTrend}
           </span>
         </Card>
 
@@ -227,6 +258,30 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </span>
           <span className={`text-sm font-extrabold mt-1 font-mono ${inpInfo.color}`}>
             {inpInfo.text}
+          </span>
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Organic Traffic
+          </span>
+          {currentSite?.gaConnected ? (
+            <span className="text-2xl font-extrabold text-violet-650 mt-1 font-mono">
+              {gaData?.overview?.organicSessions ?? 0}
+            </span>
+          ) : (
+            <span className="text-[9px] font-bold text-zinc-400 mt-1.5 font-mono uppercase">
+              GA Not Linked
+            </span>
+          )}
+        </Card>
+
+        <Card variant="flat" className="flex flex-col p-4 justify-between">
+          <span className="text-[9px] uppercase tracking-wider font-bold block text-zinc-500 font-mono">
+            Indexed Pages
+          </span>
+          <span className="text-2xl font-extrabold text-emerald-600 mt-1 font-mono">
+            {Math.max(0, 10 - indexabilityIssuesCount)}
           </span>
         </Card>
       </div>

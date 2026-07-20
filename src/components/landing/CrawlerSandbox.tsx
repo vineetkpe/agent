@@ -152,7 +152,7 @@ export const CrawlerSandbox: React.FC = () => {
           <div className="p-4 rounded-2xl border-2 transition-all bg-zinc-50 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 font-mono">
-                SEO Health Score
+                SEO Health Score (Simulated)
               </span>
               <span className="text-xs text-emerald-605 font-bold font-mono">
                 {seoScore === 100 ? "✓ 100% Correct" : `Fix remaining: ${Math.round(100 - seoScore)}%`}
@@ -162,13 +162,28 @@ export const CrawlerSandbox: React.FC = () => {
               <span className="text-4xl font-black font-mono tracking-tight text-violet-500">
                 {Math.round(seoScore)}%
               </span>
-              <span className="text-xs text-zinc-400 font-medium">crawled status</span>
+              <span className="text-xs text-zinc-400 font-medium">illustrative value</span>
             </div>
             <div className="w-full h-3 rounded-full mt-3 overflow-hidden border border-zinc-950 bg-zinc-200">
               <div
                 className="bg-gradient-to-r from-violet-600 to-indigo-500 h-full rounded-full transition-all duration-500"
                 style={{ width: `${seoScore}%` }}
               />
+            </div>
+          </div>
+
+          {/* Growth score dial */}
+          <div className="p-4 rounded-2xl border-2 transition-all bg-zinc-50 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 font-mono">
+                Growth Score (Simulated)
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 mt-2">
+              <span className="text-xl font-black font-mono tracking-tight text-emerald-605 uppercase">
+                {seoScore > 80 ? "Positive" : seoScore > 58 ? "Neutral" : "Negative"}
+              </span>
+              <span className="text-xs text-zinc-400 font-medium">projected trend</span>
             </div>
           </div>
 

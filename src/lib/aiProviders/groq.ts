@@ -1,3 +1,5 @@
+// Groq AI Provider
+// Schema generation prompt targets schema types: Product, Service, FAQPage, Organization, BreadcrumbList.
 const apiKey = process.env.GROQ_API_KEY;
 const MODEL_NAME = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 

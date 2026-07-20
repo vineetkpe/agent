@@ -160,8 +160,8 @@ export const AIContextTab: React.FC<AIContextTabProps> = ({
                     </p>
                   </div>
 
-                  {/* Industry & category */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Industry, Category, Location, Language */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="p-3 bg-zinc-50 border rounded-xl border-zinc-200">
                       <span className="text-[10px] text-zinc-400 block uppercase font-bold tracking-wider mb-1">Industry Group</span>
                       <span className="font-extrabold text-zinc-850 text-xs">{businessProfile.industry}</span>
@@ -170,34 +170,64 @@ export const AIContextTab: React.FC<AIContextTabProps> = ({
                       <span className="text-[10px] text-zinc-400 block uppercase font-bold tracking-wider mb-1">Niche Category</span>
                       <span className="font-extrabold text-zinc-850 text-xs">{businessProfile.category}</span>
                     </div>
+                    <div className="p-3 bg-zinc-50 border rounded-xl border-zinc-200">
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold tracking-wider mb-1">Location Detected</span>
+                      <span className="font-extrabold text-zinc-850 text-xs">{businessProfile.locationDetected || "Worldwide / Remote"}</span>
+                    </div>
+                    <div className="p-3 bg-zinc-50 border rounded-xl border-zinc-200">
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold tracking-wider mb-1">Language Detected</span>
+                      <span className="font-extrabold text-zinc-850 text-xs font-mono uppercase">{businessProfile.languageDetected || "en"}</span>
+                    </div>
                   </div>
 
                   {/* Products & services */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <span className="text-[10px] text-zinc-450 uppercase block font-bold tracking-wider">Discovered Products</span>
                       {businessProfile.products?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {businessProfile.products.map((p: string, idx: number) => (
-                            <span key={idx} className="px-2 py-1 rounded-md text-[10px] font-bold bg-white text-zinc-700 border border-zinc-300">
-                              {p}
-                            </span>
-                          ))}
+                        <div className="grid grid-cols-1 gap-2">
+                          {businessProfile.products.map((p: any, idx: number) => {
+                            const pName = typeof p === "string" ? p : p.name;
+                            const pDesc = typeof p === "string" ? "" : p.description;
+                            const pUrl = typeof p === "string" ? "" : p.sourceUrl;
+                            return (
+                              <div key={idx} className="p-2.5 rounded-lg border border-zinc-250 bg-white shadow-xs font-sans text-[11px] leading-relaxed">
+                                <span className="font-bold text-zinc-850 block">{pName}</span>
+                                {pDesc && <p className="text-zinc-500 text-[10px] mt-0.5">{pDesc}</p>}
+                                {pUrl && (
+                                  <a href={pUrl} target="_blank" rel="noreferrer" className="text-violet-650 hover:underline text-[9px] block mt-1 font-mono truncate">
+                                    Source: {pUrl.replace(/^https?:\/\/(www\.)?/i, "")}
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="text-zinc-400 italic text-[11px]">No products detected</span>
                       )}
                     </div>
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <span className="text-[10px] text-zinc-450 uppercase block font-bold tracking-wider">Discovered Services</span>
                       {businessProfile.services?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {businessProfile.services.map((s: string, idx: number) => (
-                            <span key={idx} className="px-2 py-1 rounded-md text-[10px] font-bold bg-violet-50 text-violet-650 border border-violet-100">
-                              {s}
-                            </span>
-                          ))}
+                        <div className="grid grid-cols-1 gap-2">
+                          {businessProfile.services.map((s: any, idx: number) => {
+                            const sName = typeof s === "string" ? s : s.name;
+                            const sDesc = typeof s === "string" ? "" : s.description;
+                            const sUrl = typeof s === "string" ? "" : s.sourceUrl;
+                            return (
+                              <div key={idx} className="p-2.5 rounded-lg border border-zinc-250 bg-violet-50/20 shadow-xs font-sans text-[11px] leading-relaxed">
+                                <span className="font-bold text-violet-750 block">{sName}</span>
+                                {sDesc && <p className="text-zinc-550 text-[10px] mt-0.5">{sDesc}</p>}
+                                {sUrl && (
+                                  <a href={sUrl} target="_blank" rel="noreferrer" className="text-violet-650 hover:underline text-[9px] block mt-1 font-mono truncate">
+                                    Source: {sUrl.replace(/^https?:\/\/(www\.)?/i, "")}
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="text-zinc-400 italic text-[11px]">No services detected</span>
@@ -216,13 +246,31 @@ export const AIContextTab: React.FC<AIContextTabProps> = ({
                       </p>
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <span className="text-[10px] text-zinc-450 uppercase block font-bold tracking-wider flex items-center gap-1">
-                        <MessageSquare className="w-3.5 h-3.5 text-zinc-400" /> Brand Voice
+                        <MessageSquare className="w-3.5 h-3.5 text-zinc-400" /> Brand Voice style guide
                       </span>
-                      <p className="text-zinc-700 leading-relaxed text-[11px] font-sans">
-                        {businessProfile.brandVoice}
-                      </p>
+                      {typeof businessProfile.brandVoice === "string" ? (
+                        <p className="text-zinc-755 leading-relaxed text-[11px] font-sans">{businessProfile.brandVoice}</p>
+                      ) : (
+                        <div className="space-y-1 bg-zinc-50/50 p-2.5 rounded-xl border border-zinc-200 font-sans text-[10px] leading-relaxed">
+                          <div><span className="font-bold text-zinc-600 font-mono text-[9px] uppercase tracking-wider">Tone:</span> {businessProfile.brandVoice?.tone}</div>
+                          <div><span className="font-bold text-zinc-600 font-mono text-[9px] uppercase tracking-wider">Reading Level:</span> {businessProfile.brandVoice?.readingLevel}</div>
+                          <div><span className="font-bold text-zinc-600 font-mono text-[9px] uppercase tracking-wider">Vocabulary:</span> {businessProfile.brandVoice?.vocabularyNotes}</div>
+                          {businessProfile.brandVoice?.doNotUse?.length > 0 && (
+                            <div>
+                              <span className="font-bold text-rose-600 font-mono text-[9px] uppercase tracking-wider block mt-1">Avoid Words/Phrases:</span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {businessProfile.brandVoice.doNotUse.map((w: string, i: number) => (
+                                  <span key={i} className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-bold border border-rose-100 text-[8px] font-mono">
+                                    {w}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

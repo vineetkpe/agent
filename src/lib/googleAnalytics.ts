@@ -123,10 +123,45 @@ export async function fetchAnalyticsData(site: any) {
 
   const overviewData = await overviewRes.json();
   const overviewRow = overviewData.rows?.[0];
+
+  let organicSessions = 0;
+  try {
+    const organicRes = await fetch(
+      `https://analyticsdata.googleapis.com/v1beta/properties/${site.gaPropertyId}:runReport`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          dateRanges: [{ startDate: "28daysAgo", endDate: "yesterday" }],
+          metrics: [{ name: "sessions" }],
+          dimensionFilter: {
+            filter: {
+              fieldName: "sessionMedium",
+              stringFilter: {
+                matchType: "EXACT",
+                value: "organic",
+              },
+            },
+          },
+        }),
+      }
+    );
+    if (organicRes.ok) {
+      const orgData = await organicRes.json();
+      organicSessions = parseInt(orgData.rows?.[0]?.metricValues?.[0]?.value || "0", 10);
+    }
+  } catch (err) {
+    console.error("[GA4 Organic Sessions Error]:", err);
+  }
+
   const overview = {
     sessions: parseInt(overviewRow?.metricValues?.[0]?.value || "0", 10),
     users: parseInt(overviewRow?.metricValues?.[1]?.value || "0", 10),
     bounceRate: parseFloat(overviewRow?.metricValues?.[2]?.value || "0"),
+    organicSessions,
   };
 
   // 2. Fetch landing pages

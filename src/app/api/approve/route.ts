@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
-import { publishWpPost, resolveWpPostIdFromUrl, updateWpTitle, updateWpMetaDescription } from "@/lib/wordpress";
+import { publishWpPost, resolveWpPostIdFromUrl, updateWpTitle, updateWpMetaDescription, getWpPost } from "@/lib/wordpress";
 import { getCurrentUser } from "@/lib/user";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { logActivity } from "@/lib/activityLog";
 
 export async function POST(req: Request) {
   try {
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
               data: {
                 status: "applied",
                 appliedAt: new Date(),
+                wpPostId: `post:${wpResult.id}`,
                 // Update suggestedValue to store the live post link in the meta
                 suggestedValue: JSON.stringify({
                   ...postData,
@@ -91,6 +93,8 @@ export async function POST(req: Request) {
                 }),
               },
             });
+
+            await logActivity(currentUser.id, "wp_publish", { siteId: site.id, itemId: item.id, type: item.type, wpLink: wpResult.url }, req);
 
             return NextResponse.json({
               success: true,
@@ -128,6 +132,8 @@ export async function POST(req: Request) {
           where: { id: itemId },
           data: { status: "approved" },
         });
+
+        await logActivity(currentUser.id, "wp_publish", { siteId: site.id, itemId: item.id, type: item.type, approvedWithoutWp: true }, req);
 
         return NextResponse.json({
           success: true,
@@ -198,6 +204,17 @@ export async function POST(req: Request) {
 
           // 2. Update based on type
           if (item.type === "meta_title") {
+            // Retrieve current live value to save as pre-fix state
+            let currentVal = item.currentValue;
+            try {
+              const liveWp = await getWpPost(site.wpUrl, site.wpUsername, appPassword, postId, postType);
+              if (liveWp.success && liveWp.title) {
+                currentVal = JSON.stringify({ title: liveWp.title, length: liveWp.title.length });
+              }
+            } catch (err) {
+              console.error("[Approve Route] Failed to fetch current live WP page state:", err);
+            }
+
             const updateResult = await updateWpTitle(
               site.wpUrl,
               site.wpUsername,
@@ -213,9 +230,11 @@ export async function POST(req: Request) {
                 data: {
                   status: "applied",
                   appliedAt: new Date(),
+                  currentValue: currentVal,
                   errorMessage: null,
                 },
               });
+              await logActivity(currentUser.id, "wp_publish", { siteId: site.id, itemId: item.id, type: item.type }, req);
               return NextResponse.json({
                 success: true,
                 status: "applied",
@@ -241,6 +260,17 @@ export async function POST(req: Request) {
             // item.type === "meta_description"
             const plugin = site.detectedSeoPlugin as "yoast" | "rankmath" | null;
             if (plugin && (plugin === "yoast" || plugin === "rankmath")) {
+              // Retrieve current live value to save as pre-fix state
+              let currentVal = item.currentValue;
+              try {
+                const liveWp = await getWpPost(site.wpUrl, site.wpUsername, appPassword, postId, postType);
+                if (liveWp.success && liveWp.metaDescription) {
+                  currentVal = JSON.stringify({ description: liveWp.metaDescription, length: liveWp.metaDescription.length });
+                }
+              } catch (err) {
+                console.error("[Approve Route] Failed to fetch current live WP page state:", err);
+              }
+
               const updateResult = await updateWpMetaDescription(
                 site.wpUrl,
                 site.wpUsername,
@@ -257,9 +287,11 @@ export async function POST(req: Request) {
                   data: {
                     status: "applied",
                     appliedAt: new Date(),
+                    currentValue: currentVal,
                     errorMessage: null,
                   },
                 });
+                await logActivity(currentUser.id, "wp_publish", { siteId: site.id, itemId: item.id, type: item.type }, req);
                 return NextResponse.json({
                   success: true,
                   status: "applied",

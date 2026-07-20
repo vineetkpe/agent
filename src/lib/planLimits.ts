@@ -143,6 +143,7 @@ export async function getEffectivePlanLimitsAsync(user?: {
   suspended?: boolean;
   email?: string | null;
   role?: string | null;
+  subscriptionEndsAt?: Date | string | null;
 } | null): Promise<PlanLimits> {
   if (!user) {
     return getPlanLimitsBySlug("free");
@@ -178,7 +179,10 @@ export async function getEffectivePlanLimitsAsync(user?: {
     };
   }
 
-  const slug = (user.plan || "free").toLowerCase();
+  let slug = (user.plan || "free").toLowerCase();
+  if (user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < new Date()) {
+    slug = "free";
+  }
   return getPlanLimitsBySlug(slug);
 }
 
@@ -192,6 +196,7 @@ export function getEffectivePlanLimits(user?: {
   suspended?: boolean;
   email?: string | null;
   role?: string | null;
+  subscriptionEndsAt?: Date | string | null;
 } | null): PlanLimits {
   if (!user) {
     return getFallbackPlanLimits().free;
@@ -226,7 +231,11 @@ export function getEffectivePlanLimits(user?: {
     };
   }
 
-  const slug = (user.plan || "free").toLowerCase();
+  let slug = (user.plan || "free").toLowerCase();
+  if (user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < new Date()) {
+    slug = "free";
+  }
+
   if (cachedPlanLimits) {
     const limits = cachedPlanLimits.plans[slug];
     if (limits) return limits;

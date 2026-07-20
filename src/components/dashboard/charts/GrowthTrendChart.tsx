@@ -38,6 +38,12 @@ export const GrowthTrendChart: React.FC<GrowthTrendChartProps> = ({ currentSite 
       if (session?.access_token) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
+      if (typeof window !== "undefined") {
+        const impToken = localStorage.getItem("impersonation_token");
+        if (impToken) {
+          headers["x-impersonation-token"] = impToken;
+        }
+      }
 
       const res = await fetch(
         `/api/analytics/trend?siteId=${currentSite.id}&range=${range}`,

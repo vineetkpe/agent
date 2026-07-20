@@ -12,6 +12,8 @@ export interface CrawledPage {
   schemas: string[]; // JSON-LD text content
   rawHtml: string;
   visibleText?: string;
+  headers?: Record<string, string>;
+  lastModifiedDate?: string;
 }
 
 export interface CrawlResult {
@@ -107,6 +109,11 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlR
         continue;
       }
 
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key.toLowerCase()] = value;
+      });
+
       const html = await response.text();
       const $ = cheerio.load(html);
 
@@ -176,6 +183,46 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlR
       textClone("script, style, iframe, noscript, svg").remove();
       const visibleText = textClone("body").text().replace(/\s+/g, " ").trim().slice(0, 1200);
 
+      // Extract Last-Modified date
+      let lastModifiedDate: string | undefined = undefined;
+      const lmHeader = response.headers.get("last-modified");
+      if (lmHeader) {
+        const parsed = Date.parse(lmHeader);
+        if (!isNaN(parsed)) {
+          lastModifiedDate = new Date(parsed).toISOString();
+        }
+      }
+
+      if (!lastModifiedDate) {
+        const metaMod = $('meta[property="article:modified_time"]').attr("content") ||
+                        $('meta[property="og:updated_time"]').attr("content") ||
+                        $('meta[name="revised"]').attr("content");
+        if (metaMod) {
+          const parsed = Date.parse(metaMod);
+          if (!isNaN(parsed)) {
+            lastModifiedDate = new Date(parsed).toISOString();
+          }
+        }
+      }
+
+      if (!lastModifiedDate) {
+        const bodyText = textClone("body").text();
+        const dateRegexes = [
+          /last\s+updated\s+(?:on\s+)?([a-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+          /updated\s+(?:on\s+)?([a-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4})/i
+        ];
+        for (const regex of dateRegexes) {
+          const match = bodyText.match(regex);
+          if (match && match[1]) {
+            const parsed = Date.parse(match[1]);
+            if (!isNaN(parsed)) {
+              lastModifiedDate = new Date(parsed).toISOString();
+              break;
+            }
+          }
+        }
+      }
+
       crawled.set(cleanUrlStr, {
         url: cleanUrlStr,
         title,
@@ -187,6 +234,8 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlR
         schemas,
         rawHtml: html,
         visibleText,
+        headers,
+        lastModifiedDate,
       });
 
     } catch (error) {

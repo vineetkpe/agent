@@ -36,12 +36,16 @@ export const AddSiteFlow: React.FC<AddSiteFlowProps> = ({
   wpMessage,
   fetchInitialData,
 }) => {
-  const [step, setStep] = useState<"url" | "crawl" | "form" | "connections" | "finish">("url");
+  const [step, setStep] = useState<"url" | "crawl" | "form" | "goals" | "connections" | "finish">("url");
   const [siteUrlInput, setSiteUrlInput] = useState("");
   const [createdSiteId, setCreatedSiteId] = useState<string | null>(null);
   const [crawlProgress, setCrawlProgress] = useState("");
   const [isThinContent, setIsThinContent] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Business Goals States
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [isSavingGoals, setIsSavingGoals] = useState(false);
 
   // Business Context Form States
   const [industry, setIndustry] = useState("");
@@ -96,7 +100,7 @@ export const AddSiteFlow: React.FC<AddSiteFlowProps> = ({
       if (data.isThin) {
         setStep("form");
       } else {
-        setStep("connections");
+        setStep("goals");
       }
     } catch (err: any) {
       clearInterval(interval);
@@ -132,11 +136,47 @@ export const AddSiteFlow: React.FC<AddSiteFlowProps> = ({
       }
 
       await fetchInitialData(createdSiteId);
-      setStep("connections");
+      setStep("goals");
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to save context.");
     } finally {
       setIsSavingContext(false);
+    }
+  };
+
+  const toggleGoal = (goal: string) => {
+    if (selectedGoals.includes(goal)) {
+      setSelectedGoals(selectedGoals.filter((g) => g !== goal));
+    } else {
+      setSelectedGoals([...selectedGoals, goal]);
+    }
+  };
+
+  const handleSaveGoals = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createdSiteId) return;
+
+    setIsSavingGoals(true);
+    setErrorMsg("");
+
+    try {
+      const res = await fetch(`/api/site/${createdSiteId}/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goals: selectedGoals }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save business goals.");
+      }
+
+      await fetchInitialData(createdSiteId);
+      setStep("connections");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to save goals.");
+    } finally {
+      setIsSavingGoals(false);
     }
   };
 
@@ -303,7 +343,64 @@ export const AddSiteFlow: React.FC<AddSiteFlowProps> = ({
             </form>
           )}
 
-          {/* STEP 4: Tool Connections */}
+          {/* STEP: Business Goals */}
+          {step === "goals" && (
+            <form onSubmit={handleSaveGoals} className="space-y-6">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black text-violet-650 uppercase tracking-widest block">
+                  Business Growth Goals
+                </span>
+                <h4 className="text-sm font-bold text-zinc-900 font-mono">
+                  What do you want to grow?
+                </h4>
+                <p className="text-[11px] text-zinc-550 leading-relaxed font-mono">
+                  Select the main outcomes you want to achieve. Our AI will focus its keyword research and writing suggestions on these objectives.
+                </p>
+              </div>
+
+              <div className="space-y-3 font-mono">
+                {[
+                  { id: "more_calls", label: "Get more phone calls", icon: "📞" },
+                  { id: "more_bookings", label: "Get more bookings / appointments", icon: "📅" },
+                  { id: "more_sales", label: "Increase online sales & conversions", icon: "💰" },
+                  { id: "more_traffic", label: "Drive more website traffic", icon: "📈" },
+                  { id: "more_local", label: "Attract local walk-in customers", icon: "📍" },
+                ].map((g) => {
+                  const isSelected = selectedGoals.includes(g.id);
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => toggleGoal(g.id)}
+                      className={`w-full p-3.5 border-2 rounded-xl text-left flex items-center justify-between text-xs font-bold transition-all ${
+                        isSelected 
+                          ? "border-zinc-950 bg-violet-50 text-violet-755 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]" 
+                          : "border-zinc-200 bg-white hover:bg-zinc-55 text-zinc-700"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="text-base">{g.icon}</span>
+                        {g.label}
+                      </span>
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center text-[9px] font-bold ${
+                        isSelected ? "border-violet-600 bg-violet-600 text-white" : "border-zinc-300 bg-white"
+                      }`}>
+                        {isSelected && "✓"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingGoals}
+                className="w-full py-3 border-2 border-zinc-950 bg-violet-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[3px_3px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-650 disabled:bg-zinc-100"
+              >
+                {isSavingGoals ? "Saving Goals..." : "Save Goals & Continue"} <ChevronRight className="w-4 h-4 inline ml-1" />
+              </button>
+            </form>
+          )}
           {step === "connections" && (
             <div className="space-y-6">
               <div className="p-3 bg-emerald-50 border border-emerald-250 text-emerald-800 text-[10px] rounded-xl flex items-center gap-2">

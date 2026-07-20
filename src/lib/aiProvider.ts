@@ -242,13 +242,28 @@ function generateMockJson<T>(prompt: string): T {
       summary: `A leading hosting provider and domain registrar specialized in residential and commercial shared cloud hosting servers, offering robust DNS performance and 24/7 technical support.`,
       industry: "Technology",
       category: "Web Hosting & Cloud Services Provider",
-      products: ["Shared SSD Cloud Hosting", "Dedicated Virtual Private Servers (VPS)", "Custom Domain Names"],
-      services: ["24/7 Managed Server Support", "Free Website Migration Support", "Domain DNS Routing Setups"],
+      products: [
+        { name: "Shared SSD Cloud Hosting", description: "Shared fast hosting server packages", sourceUrl: `${targetUrl}products` },
+        { name: "Dedicated Virtual Private Servers (VPS)", description: "Root VPS servers", sourceUrl: `${targetUrl}products` },
+        { name: "Custom Domain Names", description: "Popular domains registry", sourceUrl: `${targetUrl}products` }
+      ],
+      services: [
+        { name: "24/7 Managed Server Support", description: "Server management assistance", sourceUrl: `${targetUrl}services` },
+        { name: "Free Website Migration Support", description: "Seamless migration helper", sourceUrl: `${targetUrl}services` },
+        { name: "Domain DNS Routing Setups", description: "Custom DNS configuration", sourceUrl: `${targetUrl}services` }
+      ],
       targetAudience: "Small business owners, developers, and agency owners seeking reliable and fast web hosting services.",
-      brandVoice: "Professional, authoritative, and friendly",
+      brandVoice: {
+        tone: "Professional, authoritative, and friendly",
+        readingLevel: "General public",
+        vocabularyNotes: "Technical but accessible domain hosting references",
+        doNotUse: ["cheap hosting server", "trash servers"]
+      },
       usps: ["99.9% Server Uptime Guarantee", "Free Secure SSL Certificates Included", "Superfast NVMe SSD Storage"],
       competitors: ["GoDaddy", "Hostinger", "Bluehost"],
       confidenceScore: 0.92,
+      locationDetected: "San Francisco, CA",
+      languageDetected: "en",
     } as unknown as T;
   }
 

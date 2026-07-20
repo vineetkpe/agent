@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
+import { logActivity } from "@/lib/activityLog";
 
 export async function POST(req: Request) {
   try {
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
         id: siteId,
       },
     });
+
+    await logActivity(currentUser.id, "site_deleted", { siteId, url: site.url }, req);
 
     return NextResponse.json({
       success: true,

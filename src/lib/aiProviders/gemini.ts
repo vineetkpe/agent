@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
+// Gemini AI Provider
+// Schema generation prompt targets schema types: Product, Service, FAQPage, Organization, BreadcrumbList.
 const apiKey = process.env.GEMINI_API_KEY;
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 

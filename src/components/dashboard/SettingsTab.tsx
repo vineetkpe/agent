@@ -43,6 +43,15 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
   const isPaid = currentUser?.subscriptionActive || currentUser?.plan;
 
+  // Cancellation States
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("too_expensive");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+
+  // Billing portal loading state
+  const [loadingPortal, setLoadingPortal] = useState(false);
+
   // Notification states
   const [notifyWeekly, setNotifyWeekly] = useState(true);
   const [notifyErrors, setNotifyErrors] = useState(true);
@@ -78,19 +87,110 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     }
   };
 
-  const handleExportData = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
-      user: currentUser,
-      site: currentSite,
-      sitesList: allSites,
-      exportedAt: new Date().toISOString()
-    }, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `heydrona_settings_export_${currentUser.id || "account"}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const [exporting, setExporting] = useState(false);
+  const handleExportData = async () => {
+    try {
+      setExporting(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      if (typeof window !== "undefined") {
+        const impToken = localStorage.getItem("impersonation_token");
+        if (impToken) {
+          headers["x-impersonation-token"] = impToken;
+        }
+      }
+      
+      const res = await fetch("/api/user/export", { headers });
+      if (!res.ok) {
+        throw new Error("Failed to compile user data export");
+      }
+      const data = await res.json();
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `heydrona_data_export_${currentUser?.id || "account"}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err: any) {
+      alert("Error exporting data: " + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setLoadingPortal(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      if (typeof window !== "undefined") {
+        const impToken = localStorage.getItem("impersonation_token");
+        if (impToken) {
+          headers["x-impersonation-token"] = impToken;
+        }
+      }
+      const res = await fetch("/api/billing/portal", { headers });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to launch billing portal");
+      }
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No portal URL returned.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoadingPortal(false);
+    }
+  };
+
+  const handleCancelSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCancelling(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      if (typeof window !== "undefined") {
+        const impToken = localStorage.getItem("impersonation_token");
+        if (impToken) {
+          headers["x-impersonation-token"] = impToken;
+        }
+      }
+      const res = await fetch("/api/billing/cancel", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to cancel subscription");
+      }
+      setCancelSuccess(true);
+      setTimeout(() => {
+        setCancelSuccess(false);
+        setShowCancelModal(false);
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      alert("Error cancelling subscription: " + err.message);
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -163,20 +263,51 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
               <div className="flex flex-col justify-between p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl shadow-[3px_3px_0px_0px_rgba(9,9,11,1)]">
                 <div className="space-y-1">
-                  <span className="text-[9px] uppercase tracking-widest font-black text-violet-650 font-mono">Stripe Portal</span>
+                  <span className="text-[9px] uppercase tracking-widest font-black text-violet-650 font-mono">Billing Portal</span>
                   <h4 className="text-xs font-bold text-zinc-800 font-mono">Manage Payment Details</h4>
                   <p className="text-[11px] leading-relaxed text-zinc-505 font-mono mt-1">
-                    Add new card payments, download invoice receipts, or switch pricing tiers directly.
+                    Update payment details, cancel subscriptions, or upgrade your active quotas.
                   </p>
                 </div>
-                <button
-                  onClick={handleSubscribe}
-                  disabled={isSubscribing}
-                  type="button"
-                  className="w-full mt-4 py-2 border-2 border-zinc-950 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] cursor-pointer"
-                >
-                  {isSubscribing ? "Redirecting..." : isPaid ? "Manage Billing Portal" : "Upgrade to Pro ($19/mo)"}
-                </button>
+                
+                {isPaid && currentUser?.subscriptionStatus === "canceled" && (
+                  <div className="mt-3 p-2 bg-amber-50 border border-amber-205 text-[10px] font-mono rounded-lg text-amber-805 leading-normal">
+                    ⚠️ Your subscription was cancelled. Access continues until {currentUser.subscriptionEndsAt ? new Date(currentUser.subscriptionEndsAt).toLocaleDateString() : "the end of your period"}.
+                  </div>
+                )}
+
+                <div className="space-y-2 mt-4">
+                  {isPaid ? (
+                    <>
+                      <button
+                        onClick={handleManageBilling}
+                        disabled={loadingPortal}
+                        type="button"
+                        className="w-full py-2 border-2 border-zinc-950 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] cursor-pointer"
+                      >
+                        {loadingPortal ? "Launching..." : "Manage Billing Portal"}
+                      </button>
+                      {currentUser?.subscriptionStatus !== "canceled" && (
+                        <button
+                          onClick={() => setShowCancelModal(true)}
+                          type="button"
+                          className="w-full py-2 border-2 border-red-305 bg-red-50 text-red-750 hover:bg-red-100 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] cursor-pointer"
+                        >
+                          Cancel Subscription
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleSubscribe}
+                      disabled={isSubscribing}
+                      type="button"
+                      className="w-full py-2 border-2 border-zinc-950 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)] cursor-pointer"
+                    >
+                      {isSubscribing ? "Redirecting..." : "Upgrade to Pro ($19/mo)"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </Card>
@@ -382,7 +513,68 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
 
       </div>
+
+      {/* Cancellation Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-zinc-950/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs font-mono">
+          <Card variant="flat" className="bg-white border-2 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(9,9,11,1)] max-w-md w-full relative p-6 space-y-6">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest block">
+                Confirm Cancellation
+              </span>
+              <h4 className="text-sm font-bold text-zinc-900">
+                Why do you want to cancel your subscription?
+              </h4>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                We're sorry to see you go! Please share your reason to help us improve the SEO Agent.
+              </p>
+            </div>
+
+            <form onSubmit={handleCancelSubscription} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Reason for Cancellation</label>
+                <select
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full p-2.5 border-2 border-zinc-950 text-xs rounded-xl focus:outline-none bg-white text-zinc-805"
+                >
+                  <option value="too_expensive">Too expensive</option>
+                  <option value="not_using_it">Not using it enough</option>
+                  <option value="missing_features">Missing key features</option>
+                  <option value="other">Other reason</option>
+                </select>
+              </div>
+
+              {cancelSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-250 text-emerald-800 text-[10px] rounded-xl flex items-center gap-2">
+                  <span>✓</span>
+                  <span>Subscription cancelled successfully. Refreshing dashboard...</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={isCancelling}
+                  type="button"
+                  className="w-full py-2.5 border-2 border-zinc-950 bg-white hover:bg-zinc-50 text-zinc-800 font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]"
+                >
+                  Keep Subscription
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCancelling || cancelSuccess}
+                  className="w-full py-2.5 border-2 border-zinc-950 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]"
+                >
+                  {isCancelling ? "Cancelling..." : "Confirm Cancel"}
+                </button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
+
 export default SettingsTab;

@@ -154,6 +154,7 @@ export async function getCurrentUser(req: Request) {
           id: userId,
           email: email,
           subscriptionActive: false,
+          name: user.user_metadata?.name || null,
         }
       });
       console.log(`[Auth] Registered new user in database: ${email}`);
@@ -161,7 +162,15 @@ export async function getCurrentUser(req: Request) {
       // If user exists with the same email but has a different ID (e.g. from local seed), align it
       dbUser = await prisma.user.update({
         where: { email: email },
-        data: { id: userId }
+        data: { 
+          id: userId,
+          name: dbUser.name || user.user_metadata?.name || null,
+        }
+      });
+    } else if (!dbUser.name && user.user_metadata?.name) {
+      dbUser = await prisma.user.update({
+        where: { id: userId },
+        data: { name: user.user_metadata.name }
       });
     }
 

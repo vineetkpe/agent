@@ -1,39 +1,19 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
+import { paymentProvider } from "@/lib/paymentProvider";
 import { prisma } from "@/lib/prisma";
-
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+import { logActivity } from "@/lib/activityLog";
+import { sendEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature") || "";
 
-  let event: Stripe.Event;
-
-  const isMock = !webhookSecret || webhookSecret === "mock-webhook-secret";
-
-  if (isMock) {
-    console.warn("[Webhook] running in mock mode. Signature verification bypassed.");
-    try {
-      event = JSON.parse(body) as Stripe.Event;
-    } catch (err: any) {
-      console.error("[Webhook Error] Mock parse failed:", err.message);
-      return NextResponse.json({ error: "Invalid payload json" }, { status: 400 });
-    }
-  } else {
-    if (!stripe) {
-      console.error("[Webhook Error] Stripe client not initialized");
-      return NextResponse.json({ error: "Stripe client not initialized" }, { status: 500 });
-    }
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret!);
-    } catch (err: any) {
-      console.error("[Webhook Error] Signature verification failed:", err.message);
-      return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
-    }
+  let event: any;
+  try {
+    event = await paymentProvider.verifyWebhookSignature(body, signature);
+  } catch (err: any) {
+    console.error("[Webhook Error] Signature verification failed:", err.message);
+    return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
   }
 
   // Handle events
@@ -58,12 +38,52 @@ export async function POST(req: Request) {
           planSource: "stripe",
           planActivatedAt: new Date(),
           stripeCustomerId: customerId,
+          paymentFailedAt: null,
+          subscriptionStatus: "active",
         },
       });
+      await logActivity(userId, "plan_upgrade", { plan, customerId });
       console.log(`[Webhook] Activated plan ${plan} for user ${userId} (Customer: ${customerId})`);
-    } else if (event.type === "customer.subscription.deleted" || event.type === "invoice.payment_failed") {
+    } else if (event.type === "invoice.payment_failed") {
       const customerId = session.customer;
+      if (customerId) {
+        const user = await prisma.user.findFirst({
+          where: { stripeCustomerId: customerId },
+        });
 
+        if (user) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              paymentFailedAt: new Date(),
+              subscriptionStatus: "past_due",
+            },
+          });
+
+          await logActivity(user.id, "plan_payment_failed", { customerId });
+
+          // Send warning email via Resend
+          await sendEmail({
+            to: user.email,
+            subject: "[Action Required] Your payment for HeyDrona failed",
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                <h2>Payment Failed</h2>
+                <p>Hello,</p>
+                <p>We were unable to process your recurring payment for your HeyDrona SEO subscription.</p>
+                <p>To prevent any service interruption, we have initiated a <strong>7-day grace period</strong>. Your account access will continue normally during this window while our billing provider retries the payment.</p>
+                <p>Please log in and update your payment details as soon as possible.</p>
+                <br />
+                <p>Best regards,</p>
+                <p>The HeyDrona Team</p>
+              </div>
+            `,
+          });
+          console.log(`[Webhook] Handle invoice.payment_failed grace period for customer ${customerId}`);
+        }
+      }
+    } else if (event.type === "customer.subscription.deleted") {
+      const customerId = session.customer;
       if (customerId) {
         const user = await prisma.user.findFirst({
           where: { stripeCustomerId: customerId },
@@ -75,18 +95,34 @@ export async function POST(req: Request) {
             data: {
               plan: null,
               subscriptionActive: false,
+              subscriptionStatus: "canceled",
             },
           });
+
+          await logActivity(user.id, "plan_cancel", { customerId });
+
+          // Send subscription end email
+          await sendEmail({
+            to: user.email,
+            subject: "Your HeyDrona subscription has ended",
+            html: `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                <h2>Subscription Ended</h2>
+                <p>Hello,</p>
+                <p>Your HeyDrona subscription has ended and your workspace accounts have been reverted to the free level.</p>
+                <p>We are sorry to see you go. If you ever want to resume optimization recommendations or visual flow pipelines, you can upgrade your plan at any time.</p>
+                <br />
+                <p>Best regards,</p>
+                <p>The HeyDrona Team</p>
+              </div>
+            `,
+          });
           console.log(`[Webhook] Deactivated subscription for user ${user.id} due to event ${event.type}`);
-        } else {
-          console.warn(`[Webhook] No user found with stripeCustomerId ${customerId} for event ${event.type}`);
         }
       }
     }
   } catch (dbErr: any) {
     console.error("[Webhook Database Error]:", dbErr);
-    // Wrap all DB writes in try/catch, return 200 to Stripe even on internal processing errors
-    // so Stripe doesn't endlessly retry, but make the error loud in server logs.
     return NextResponse.json({ error: "Internal processing error", message: dbErr.message }, { status: 200 });
   }
 

@@ -15,9 +15,10 @@ export async function GET(req: Request) {
     const users = await prisma.user.findMany({
       where: q
         ? {
-            email: {
-              contains: q,
-            },
+            OR: [
+              { email: { contains: q } },
+              { name: { contains: q } }
+            ]
           }
         : {},
       include: {
@@ -55,6 +56,7 @@ export async function GET(req: Request) {
       return {
         id: u.id,
         email: u.email,
+        name: u.name,
         subscriptionActive: u.subscriptionActive,
         suspended: u.suspended,
         isAdmin: u.isAdmin,

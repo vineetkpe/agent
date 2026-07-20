@@ -105,7 +105,7 @@ export async function publishWpPost(
   title: string,
   content: string,
   slug?: string
-): Promise<{ success: boolean; url?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string; id?: number; error?: string }> {
   const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
   const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/posts`;
   
@@ -139,6 +139,7 @@ export async function publishWpPost(
       return {
         success: true,
         url: data.link,
+        id: data.id,
       };
     }
 
@@ -349,6 +350,82 @@ export async function updateWpMetaDescription(
           error: `Detected ${plugin === "yoast" ? "Yoast SEO" : "RankMath"} but automatic meta description update was not accepted by your site. Custom meta fields might not be registered to allow REST updates on your WordPress configuration.`,
         };
       }
+    }
+
+    const errData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      error: errData.message || `WordPress API returned status ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || "Network error or connection timeout",
+    };
+  }
+}
+
+export async function getWpPost(
+  wpUrl: string,
+  username: string,
+  appPassword: string,
+  postId: number,
+  postType: "post" | "page"
+): Promise<{ success: boolean; title?: string; metaDescription?: string; error?: string }> {
+  const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
+  const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/${postType}s/${postId}`;
+  const credentials = Buffer.from(`${username.trim()}:${appPassword.trim()}`).toString("base64");
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (res.status === 200) {
+      const data = await res.json();
+      const meta = data?.meta || {};
+      return {
+        success: true,
+        title: data.title?.rendered || "",
+        metaDescription: meta._yoast_wpseo_metadesc || meta.rank_math_description || "",
+      };
+    }
+    return { success: false, error: `WordPress API returned status ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Network error" };
+  }
+}
+
+export async function deleteWpPost(
+  wpUrl: string,
+  username: string,
+  appPassword: string,
+  postId: number,
+  postType: "post" | "page"
+): Promise<{ success: boolean; error?: string }> {
+  const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
+  const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/${postType}s/${postId}?force=true`;
+  const credentials = Buffer.from(`${username.trim()}:${appPassword.trim()}`).toString("base64");
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (res.status === 200) {
+      return { success: true };
     }
 
     const errData = await res.json().catch(() => ({}));

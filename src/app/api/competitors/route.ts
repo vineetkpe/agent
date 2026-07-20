@@ -50,7 +50,7 @@ We need to identify 3-5 direct local or industry competitors for this business:
 - Industry: ${profile.industry}
 - Category: ${profile.category}
 - Summary: ${profile.summary}
-- Services Offered: ${profile.services?.join(", ") || "None listed"}
+- Services Offered: ${profile.services ? (Array.isArray(profile.services) ? profile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services)) : "None listed"}
 - Target Audience: ${profile.targetAudience}
 
 Please suggest 3-5 actual competitor domain URLs and their business names. Ground your suggestions in the location or category of this business. Do not suggest dominant global brands (like Amazon or Google) unless they are direct competitors.

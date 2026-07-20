@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
+import { KnowledgeGraphView } from "./KnowledgeGraphView";
 
 interface ConnectionsTabProps {
   handleConnectCMS: (e: React.FormEvent) => void;
@@ -386,6 +387,11 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
             </Card>
           ))}
         </div>
+      </div>
+
+      {/* Visual Link & Topic Knowledge Graph */}
+      <div className="pt-8 border-t border-zinc-200">
+        <KnowledgeGraphView currentSite={currentSite} />
       </div>
     </div>
   );

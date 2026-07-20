@@ -8,7 +8,9 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { OverviewTab } from "@/components/dashboard/OverviewTab";
 import { CrawlerTab } from "@/components/dashboard/CrawlerTab";
 import { RecommendationsTab } from "@/components/dashboard/RecommendationsTab";
+import { TasksTab } from "@/components/dashboard/TasksTab";
 import { ContentTab } from "@/components/dashboard/ContentTab";
+import { GlobalSearch } from "@/components/dashboard/GlobalSearch";
 import { ConnectionsTab } from "@/components/dashboard/ConnectionsTab";
 import { KeywordResearchTab } from "@/components/dashboard/KeywordResearchTab";
 import { Chatbot } from "@/components/dashboard/Chatbot";
@@ -16,6 +18,7 @@ import { SitesTab } from "@/components/dashboard/SitesTab";
 import { AIContextTab } from "@/components/dashboard/AIContextTab";
 import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
 import { SettingsTab } from "@/components/dashboard/SettingsTab";
+import { ReportsTab } from "@/components/dashboard/ReportsTab";
 import { NotificationsTab } from "@/components/dashboard/NotificationsTab";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
@@ -25,12 +28,38 @@ import { AgentFlowView } from "@/components/dashboard/AgentFlowView";
 import { CompetitorTab } from "@/components/dashboard/CompetitorTab";
 import { UptimeWidget } from "@/components/dashboard/UptimeWidget";
 import { AddSiteFlow } from "@/components/dashboard/AddSiteFlow";
+import { FeedbackTab } from "@/components/dashboard/FeedbackTab";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [planLimitError, setPlanLimitError] = useState<{ message: string; type?: string } | null>(null);
   const [isAddSiteWizardOpen, setIsAddSiteWizardOpen] = useState(false);
+
+  useEffect(() => {
+    // Log login event once per browser session
+    const checkLoginLog = async () => {
+      const alreadyLogged = sessionStorage.getItem("heydrona_login_logged");
+      if (!alreadyLogged) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await fetch("/api/auth/login-event", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+            });
+            sessionStorage.setItem("heydrona_login_logged", "true");
+          }
+        } catch (err) {
+          console.error("[Login Event Logger Failed]:", err);
+        }
+      }
+    };
+    checkLoginLog();
+  }, []);
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -219,6 +248,7 @@ export default function DashboardPage() {
               </span>
             )}
 
+            <GlobalSearch />
             <NotificationBell selectTab={data.selectTab} />
           </div>
         </header>
@@ -260,6 +290,7 @@ export default function DashboardPage() {
                 activityLog={data.activityLog}
                 uptimeChecks={data.uptimeChecks}
                 currentUser={data.currentUser}
+                gaData={data.gaData}
                 onRefresh={() => data.fetchInitialData(data.currentSite?.id)}
               />
             </div>
@@ -295,6 +326,15 @@ export default function DashboardPage() {
               copiedId={data.copiedId}
               currentSite={data.currentSite}
               selectTab={data.selectTab}
+            />
+          )}
+
+          {data.activeTab === "tasks" && (
+            <TasksTab
+              allUserAuditItems={data.allUserAuditItems}
+              handleActionItem={data.handleActionItem}
+              copiedId={data.copiedId}
+              handleCopyText={data.handleCopyText}
             />
           )}
 
@@ -399,6 +439,13 @@ export default function DashboardPage() {
             />
           )}
 
+          {data.activeTab === "reports" && (
+            <ReportsTab
+              allSites={data.allSites}
+              currentSite={data.currentSite}
+            />
+          )}
+
           {data.activeTab === "settings" && (
             <SettingsTab
               currentUser={data.currentUser}
@@ -412,6 +459,10 @@ export default function DashboardPage() {
 
           {data.activeTab === "notifications" && (
             <NotificationsTab selectTab={data.selectTab} />
+          )}
+
+          {data.activeTab === "feedback" && (
+            <FeedbackTab currentSite={data.currentSite} />
           )}
         </div>
       </main>

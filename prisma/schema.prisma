@@ -25,6 +25,13 @@ model User {
   createdAt               DateTime  @default(now())
   role                    String    @default("user") // "user" | "admin"
   sites                   Site[]
+  paymentFailedAt         DateTime?
+  subscriptionStatus      String?
+  name                    String?
+  reportEmailDay          Int?      @default(1)
+  reportEmailEnabled      Boolean   @default(true)
+  subscriptionEndsAt      DateTime?
+  cancellationReason      String?
 }
 
 model Site {
@@ -59,6 +66,8 @@ model Site {
   audits                Audit[]
   auditItems            AuditItem[]
   uptimeChecks          UptimeCheck[]
+  businessGoals         String?
+  knowledgeGraphData    String?
 }
 
 model Audit {
@@ -96,10 +105,14 @@ model AuditItem {
   suggestedValue String?   // Store recommended title, content, etc.
   status         String    @default("pending") // pending | approved | rejected | applied
   appliedAt      DateTime?
+  rolledBackAt   DateTime?
   errorMessage   String?
   wpPostId       String?
   source         String?   // "gsc_verified" | "ai_suggested"
   contentQualityWarning String?
+  priority       String?   // "critical" | "high" | "medium" | "low"
+  impactScore    Int?      // 1-10
+  difficultyScore Int?     // 1-10
   updatedAt      DateTime  @default(now()) @updatedAt
   createdAt      DateTime  @default(now())
 }
@@ -194,5 +207,44 @@ model PlanFeature {
   value      Json
 
   @@unique([planId, featureKey])
+}
+
+model UserActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Feedback {
+  id          String    @id @default(uuid())
+  userId      String
+  type        String    // "bug" | "suggestion" | "other"
+  message     String
+  pageContext String?
+  status      String    @default("open") // "open" | "reviewed" | "resolved"
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ReportLog {
+  id         String   @id @default(uuid())
+  userId     String
+  siteId     String
+  reportType String   // "audit_summary" | "health" | "performance"
+  format     String   // "pdf" | "csv"
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([siteId])
 }
 

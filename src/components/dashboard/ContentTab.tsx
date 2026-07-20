@@ -59,7 +59,11 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono text-zinc-505">/{post.slug || "blog"}</span>
-                    {isApplied ? (
+                    {item.status === "rolled_back" ? (
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-zinc-650 bg-zinc-500/10 px-2 py-0.5 rounded border border-zinc-500/20">
+                        Rolled Back
+                      </span>
+                    ) : isApplied ? (
                       <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                         Pushed to CMS
                       </span>
@@ -98,6 +102,32 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                     {item.status === "pending" && (
                       <Button variant="primary" onClick={() => handleActionItem(item.id, "approve")}>
                         Approve Fix
+                      </Button>
+                    )}
+                    {isApplied && (
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          if (!confirm("Are you sure you want to rollback this blog post? This will delete the draft from WordPress.")) return;
+                          try {
+                            const res = await fetch("/api/rollback", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ itemId: item.id }),
+                            });
+                            if (!res.ok) {
+                              const errData = await res.json();
+                              throw new Error(errData.error || "Failed to rollback post");
+                            }
+                            alert("Successfully rolled back blog post!");
+                            window.location.reload();
+                          } catch (e: any) {
+                            alert(e.message);
+                          }
+                        }}
+                        className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                      >
+                        Rollback
                       </Button>
                     )}
                   </div>

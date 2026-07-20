@@ -106,6 +106,20 @@ const getRecommendationDetails = (type: string) => {
         impact: "High",
         impactScore: 85,
       };
+    case "redirect_chain":
+      return {
+        explanation: "Redirect chains occur when a crawler is redirected multiple times (more than 2 hops) before hitting the target URL.",
+        whyItMatters: "Excessive redirect chains dilute link equity (PageRank) and slow down page speed loading for users and bots.",
+        impact: "Medium",
+        impactScore: 60,
+      };
+    case "indexability_issue":
+      return {
+        explanation: "This page contains a 'noindex' directive or X-Robots header that explicitly tells Google not to index the page.",
+        whyItMatters: "A 'noindex' directive completely blocks organic visibility, ensuring the page never ranks on Google.",
+        impact: "Critical",
+        impactScore: 99,
+      };
     default:
       return {
         explanation: "Identified quality or structural gap in site markup.",
@@ -125,6 +139,32 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
   selectTab,
 }) => {
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [isRollingBack, setIsRollingBack] = useState<string | null>(null);
+
+  const handleRollback = async (itemId: string) => {
+    if (!confirm("Are you sure you want to rollback this applied fix? This will revert the live changes on your WordPress site.")) {
+      return;
+    }
+    
+    setIsRollingBack(itemId);
+    try {
+      const res = await fetch("/api/rollback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to rollback fix.");
+      }
+      alert("Successfully rolled back fix!");
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "An unexpected error occurred during rollback.");
+    } finally {
+      setIsRollingBack(null);
+    }
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -146,6 +186,8 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
         "robots_sitemap",
         "image_weight",
         "internal_linking",
+        "redirect_chain",
+        "indexability_issue",
       ].includes(item.type)
     ) || [];
 
@@ -310,6 +352,7 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                     </span>
 
                     {isApplied && <Badge variant="emerald">Live on Site</Badge>}
+                    {item.status === "rolled_back" && <Badge variant="zinc">Rolled Back</Badge>}
                     {isApproved && <Badge variant="amber">Approved -- Manual Action Needed</Badge>}
                     {isRejected && <Badge variant="zinc">Rejected</Badge>}
                     {item.status === "pending" && (
@@ -386,6 +429,12 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                             }
                             if (item.type === "robots_sitemap") {
                               return `File: ${currentValParsed.path || "sitemap.xml"} - ${currentValParsed.error || "status: " + currentValParsed.statusCode || "Missing"}`;
+                            }
+                            if (item.type === "redirect_chain") {
+                              return `Chain: ${currentValParsed.chain?.join(" -> ")} (${currentValParsed.hops} hops${currentValParsed.isLoop ? " - Loop!" : ""})`;
+                            }
+                            if (item.type === "indexability_issue") {
+                              return `Blocks: ${currentValParsed.noindexMeta ? "meta noindex" : ""} ${currentValParsed.noindexHeader ? "header x-robots-tag" : ""}`;
                             }
                             if (item.type === "heading_structure") {
                               return currentValParsed.skippedDetails || `H1 Count: ${currentValParsed.h1Count}`;
@@ -517,6 +566,18 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                     {/* If approved/applied, show integration copying option */}
                     {(isApproved || isApplied) && (
                       <div className="space-y-2.5 pt-3 border-t border-zinc-100">
+                        {isApplied && (
+                          <div className="flex justify-end gap-3 pt-1">
+                            <button
+                              onClick={() => handleRollback(item.id)}
+                              disabled={isRollingBack === item.id}
+                              type="button"
+                              className="px-4 py-2 border-2 border-zinc-950 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] cursor-pointer disabled:bg-zinc-100 disabled:text-zinc-400"
+                            >
+                              {isRollingBack === item.id ? "Rolling back..." : "Rollback Fix"}
+                            </button>
+                          </div>
+                        )}
                         <div className="p-3 rounded-xl border flex items-center justify-between text-xs transition-all bg-zinc-50 border-zinc-200">
                           <code className="text-xs font-mono truncate max-w-lg text-zinc-600 block pr-4">
                             {["schema_markup", "robots_sitemap"].includes(item.type)

@@ -1,5 +1,5 @@
 import { crawlSite } from "@/lib/crawler";
-import { runSeoAudits, getPageSpeedData } from "@/lib/seoChecks";
+import { runSeoAudits, getPageSpeedData, getPriorityScoring } from "@/lib/seoChecks";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
@@ -112,6 +112,21 @@ export async function runAuditForSite(
   if (businessProfileData !== null) {
     updateData.businessProfile = businessProfileData;
   }
+  
+  // Build and attach the knowledge graph
+  try {
+    const activeProfile = businessProfileData 
+      ? JSON.parse(businessProfileData) 
+      : (site.businessProfile ? JSON.parse(site.businessProfile) : null);
+    if (activeProfile) {
+      const { buildKnowledgeGraph } = await import("./knowledgeGraph");
+      const graph = buildKnowledgeGraph(crawledPages, activeProfile);
+      updateData.knowledgeGraphData = JSON.stringify(graph);
+    }
+  } catch (kgErr) {
+    console.error("[runAudit] Failed to build knowledge graph:", kgErr);
+  }
+
   const updatedSite = await prisma.site.update({
     where: { id: site.id },
     data: updateData,
@@ -181,18 +196,44 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
           competitors: [],
           confidenceScore: 1.0,
         } : null);
+    const productsList = parsedProfile?.products
+      ? (Array.isArray(parsedProfile.products)
+          ? parsedProfile.products.map((p: any) => typeof p === "string" ? p : p.name).join(", ")
+          : String(parsedProfile.products))
+      : "None listed";
+    const servicesList = parsedProfile?.services
+      ? (Array.isArray(parsedProfile.services)
+          ? parsedProfile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ")
+          : String(parsedProfile.services))
+      : "None listed";
+    const voiceGuide = parsedProfile?.brandVoice
+      ? (typeof parsedProfile.brandVoice === "string"
+          ? parsedProfile.brandVoice
+          : `Tone: ${parsedProfile.brandVoice?.tone || ""}, Reading Level: ${parsedProfile.brandVoice?.readingLevel || ""}, Vocabulary Notes: ${parsedProfile.brandVoice?.vocabularyNotes || ""}, Avoid Words/Phrases: ${(parsedProfile.brandVoice?.doNotUse || []).join(", ")}`)
+      : "Professional";
+
     const profileText = parsedProfile ? `
 Here is the Discovered Business Intelligence Profile for this company:
 - Industry: ${parsedProfile.industry}
 - Category: ${parsedProfile.category}
 - Summary: ${parsedProfile.summary}
-- Products: ${parsedProfile.products?.join(", ") || "None listed"}
-- Services: ${parsedProfile.services?.join(", ") || "None listed"}
+- Products: ${productsList}
+- Services: ${servicesList}
 - Target Audience: ${parsedProfile.targetAudience}
-- Brand Voice/Tone: ${parsedProfile.brandVoice}
+- Brand Voice/Tone Style Guide: ${voiceGuide}
+- Location Detected: ${parsedProfile.locationDetected || "Worldwide / Remote"}
+- Language Detected: ${parsedProfile.languageDetected || "en"}
 - Unique Selling Points (USPs): ${parsedProfile.usps?.join(" | ") || "None"}
 - Competitors: ${parsedProfile.competitors?.join(", ") || "None listed"}
 ` : "No explicit business profile discovered yet.";
+
+    const businessGoalsList = updatedSite.businessGoals ? JSON.parse(updatedSite.businessGoals) : [];
+    const goalsBiasText = businessGoalsList.length > 0
+      ? `\nBIAS SIGNAL: The business owner is focused on these goals: ${businessGoalsList.join(", ")}.
+If the goals include 'more_calls' or 'more_bookings', prioritize local-intent keywords and content that prompts the visitor to contact, call, or book an appointment.
+If the goals include 'more_sales', prioritize transactional-intent keywords and clear product/service value propositions.
+If the goals include 'more_traffic', suggest high-volume informational keywords that solve common customer search questions.\n`
+      : "";
 
     const targetKeywordRule = targetKeyword
       ? `\nCRITICAL REQUIRED TARGET KEYWORD: You MUST write one of the blog posts targeting the primary keyword "${targetKeyword}". This keyword must be the primary focus of that blog post.\n`
@@ -201,6 +242,8 @@ Here is the Discovered Business Intelligence Profile for this company:
     const systemPrompt = `
 You are an expert AI Website Growth Agent specializing in Local Business SEO and Content Marketing.
 We have audited the website: ${cleanUrl}.
+
+${goalsBiasText}
 
 ${profileText}
 
@@ -252,7 +295,7 @@ Based on this audit data, please generate:
 2. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', or 'duplicate_content' issue.
    - For 'meta_title' issues: Provide an optimized title tag between 30 and 60 characters.
    - For 'meta_description' issues: Provide an optimized meta description between 120 and 160 characters.
-   - For 'schema_markup' issues: Provide a valid schema.org LocalBusiness or Article JSON-LD markup string.
+   - For 'schema_markup' issues: Provide a valid schema.org JSON-LD markup string. Select the correct schema type based on the actual page content and catalog: a product page -> Product schema, a service page -> Service schema, a page with Q&A -> FAQPage schema, any page (site-level) -> Organization schema, BreadcrumbList schema if clear page hierarchy exists. Never generate a type that doesn't match the page content (e.g. no Product schema on blog posts).
    - For 'missing_alt' issues: Provide an optimized alt text suggestion for the image.
    - For 'broken_link' issues: Provide a recommended action or a suggested replacement URL if obvious from context.
    - For 'heading_structure' issues: Provide a corrected heading structure outline suggestion (e.g. H1: title, H2: subtitle).
@@ -336,6 +379,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         );
         const currentValue = relatedIssue ? JSON.stringify(relatedIssue.currentValue) : "";
 
+        const scores = getPriorityScoring(fix.type);
         await prisma.auditItem.create({
           data: {
             auditId: audit.id,
@@ -345,6 +389,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             currentValue: currentValue,
             suggestedValue: fix.suggestedValue,
             status: "pending",
+            priority: scores.priority,
+            impactScore: scores.impactScore,
+            difficultyScore: scores.difficultyScore,
           },
         });
       }
@@ -409,6 +456,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           }
         }
 
+        const scores = getPriorityScoring("blog_post");
         await prisma.auditItem.create({
           data: {
             auditId: audit.id,
@@ -433,6 +481,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             }),
             status: "pending",
             contentQualityWarning: warning,
+            priority: scores.priority,
+            impactScore: scores.impactScore,
+            difficultyScore: scores.difficultyScore,
           },
         });
       }
@@ -460,6 +511,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           suggestedValueObj.ctr = matchedGsc.ctr;
         }
 
+        const scores = getPriorityScoring("keyword_opportunity");
         await prisma.auditItem.create({
           data: {
             auditId: audit.id,
@@ -470,6 +522,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             suggestedValue: JSON.stringify(suggestedValueObj),
             status: "pending",
             source: source,
+            priority: scores.priority,
+            impactScore: scores.impactScore,
+            difficultyScore: scores.difficultyScore,
           },
         });
       }
@@ -482,7 +537,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
   // Save mechanical/informational issues directly
   try {
     const directIssues = auditResults.issues.filter(issue =>
-      ["insecure_link", "image_weight", "robots_sitemap"].includes(issue.type)
+      ["insecure_link", "image_weight", "robots_sitemap", "mobile_viewport_missing", "hreflang_missing", "orphan_page", "missing_security_headers", "js_rendering_risk", "generic_anchor_text"].includes(issue.type)
     );
     for (const issue of directIssues) {
       if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml") {
@@ -494,6 +549,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         suggestedText = `Create a robots.txt file at ${cleanUrl}/robots.txt with: \n\nUser-agent: *\nAllow: /\n\nSitemap: ${cleanUrl}/sitemap.xml`;
       }
 
+      const scores = getPriorityScoring(issue.type);
       await prisma.auditItem.create({
         data: {
           auditId: audit.id,
@@ -503,6 +559,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           currentValue: JSON.stringify(issue.currentValue),
           suggestedValue: suggestedText,
           status: "pending",
+          priority: scores.priority,
+          impactScore: scores.impactScore,
+          difficultyScore: scores.difficultyScore,
         },
       });
     }
@@ -514,6 +573,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
       const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
       
+      const scores = getPriorityScoring("robots_sitemap");
       await prisma.auditItem.create({
         data: {
           auditId: audit.id,
@@ -523,6 +583,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           currentValue: JSON.stringify({ path: "/sitemap.xml", missing: true }),
           suggestedValue: sitemapXml,
           status: "pending",
+          priority: scores.priority,
+          impactScore: scores.impactScore,
+          difficultyScore: scores.difficultyScore,
         },
       });
     }
@@ -592,6 +655,7 @@ Provide suggestions as a JSON object matching this schema:
 
       if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
         for (const sug of linkingResponse.suggestions) {
+          const scores = getPriorityScoring("internal_linking");
           await prisma.auditItem.create({
             data: {
               auditId: audit.id,
@@ -605,6 +669,9 @@ Provide suggestions as a JSON object matching this schema:
                 reason: sug.reason,
               }),
               status: "pending",
+              priority: scores.priority,
+              impactScore: scores.impactScore,
+              difficultyScore: scores.difficultyScore,
             },
           });
         }

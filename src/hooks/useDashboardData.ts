@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance" | "settings" | "notifications" | "keywords" | "flow" | "competitors" | "uptime";
+export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance" | "settings" | "notifications" | "keywords" | "flow" | "competitors" | "uptime" | "feedback" | "tasks" | "reports";
 
 export function useDashboardData() {
   const [siteUrl, setSiteUrl] = useState("");
@@ -15,6 +15,8 @@ export function useDashboardData() {
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [allUserAuditItems, setAllUserAuditItems] = useState<any[]>([]);
+  const [gaData, setGaData] = useState<any>(null);
 
   // Independent scan progress states
   const [aiScanStatus, setAiScanStatus] = useState<"pending" | "running" | "done" | "failed">("pending");
@@ -105,6 +107,16 @@ export function useDashboardData() {
         }
         if (data.allSites) {
           setAllSites(data.allSites);
+        }
+        if (data.allUserAuditItems) {
+          setAllUserAuditItems(data.allUserAuditItems);
+        } else {
+          setAllUserAuditItems([]);
+        }
+        if (data.gaData) {
+          setGaData(data.gaData);
+        } else {
+          setGaData(null);
         }
         if (data.user) {
           setCurrentUser(data.user);
@@ -429,9 +441,14 @@ export function useDashboardData() {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
+      const siteIdParam = params.get("siteId");
+      if (siteIdParam) {
+        setSelectedSiteId(siteIdParam);
+      }
+
       const tab = params.get("tab");
-      if (tab === "connections") {
-        setActiveTab("connections");
+      if (tab) {
+        setActiveTab(tab as TabType);
       }
 
       const successMsg = params.get("success");
@@ -503,5 +520,9 @@ export function useDashboardData() {
     setPrefilledKeyword,
     uptimeChecks,
     setUptimeChecks,
+    allUserAuditItems,
+    setAllUserAuditItems,
+    gaData,
+    setGaData,
   };
 }

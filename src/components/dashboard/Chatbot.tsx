@@ -43,6 +43,21 @@ export const Chatbot: React.FC<ChatbotProps> = ({ currentSite }) => {
     ]);
   }, [currentSite?.id]);
 
+  useEffect(() => {
+    const handleSeedChat = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { text } = customEvent.detail || {};
+      setIsOpen(true);
+      if (text) {
+        handleSendMessage(text);
+      }
+    };
+    window.addEventListener("chatbot:seed", handleSeedChat);
+    return () => {
+      window.removeEventListener("chatbot:seed", handleSeedChat);
+    };
+  }, [messages, isLoading, currentSite]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || input;
     if (!text.trim() || isLoading) return;

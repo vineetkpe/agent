@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/user";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { validateSeoContent } from "@/lib/contentValidator";
+import { getPriorityScoring } from "@/lib/seoChecks";
 
 const articleResponseSchema = {
   type: "OBJECT",
@@ -49,9 +50,19 @@ export async function POST(req: Request) {
     const typeStr = keywordType === "long-tail" ? "long-tail keyword" : "short-tail keyword";
     const geoStr = geoTarget ? `Geographic Target Region: ${geoTarget}` : "Geographic Target Region: Worldwide (No local targeting)";
 
+    const businessGoalsList = site.businessGoals ? JSON.parse(site.businessGoals) : [];
+    const goalsBiasText = businessGoalsList.length > 0
+      ? `\nBIAS SIGNAL: The business owner is focused on these goals: ${businessGoalsList.join(", ")}.
+If the goals include 'more_calls' or 'more_bookings', frame the article's call-to-actions to prompt the reader to contact, call, or book an appointment.
+If the goals include 'more_sales', frame the article around product value propositions and conversions.
+If the goals include 'more_traffic', frame the article as a highly helpful guide resolving common informational search queries.\n`
+      : "";
+
     // Construct highly specific SEO prompt targeting the keyword and type
     const prompt = `
 Generate a high-ranking blog article optimized for search engine indexing.
+
+${goalsBiasText}
 
 Target Configuration:
 - Target Keyword: "${keyword}"
@@ -128,6 +139,7 @@ Strict SEO Content Generation Rules:
 
     if (latestAudit) {
       const warning = passed ? null : "This draft doesn't fully meet SEO best practices, review before publishing";
+      const scores = getPriorityScoring("blog_post");
       await prisma.auditItem.create({
         data: {
           auditId: latestAudit.id,
@@ -151,7 +163,10 @@ Strict SEO Content Generation Rules:
             }
           }),
           contentQualityWarning: warning,
-          status: "pending"
+          status: "pending",
+          priority: scores.priority,
+          impactScore: scores.impactScore,
+          difficultyScore: scores.difficultyScore,
         }
       });
       console.log(`[AI Content Gen] Automatically saved article as a pending AuditItem under Audit #${latestAudit.id}`);

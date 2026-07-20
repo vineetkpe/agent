@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/user";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { logActivity } from "@/lib/activityLog";
 import { crawlSite, isThinContent } from "@/lib/crawler";
 import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 
@@ -78,6 +79,8 @@ export async function POST(req: Request) {
         url: cleanUrl,
       },
     });
+
+    await logActivity(currentUser.id, "site_created", { siteId: site.id, url: cleanUrl }, req);
 
     // Run crawler & check content quality
     let isThin = true;

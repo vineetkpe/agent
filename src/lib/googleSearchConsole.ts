@@ -135,3 +135,59 @@ export async function fetchSearchConsoleData(site: any): Promise<any[]> {
   
   return top50;
 }
+
+export async function fetchGscSummary(site: any, startDate: Date, endDate: Date): Promise<{ clicks: number; impressions: number }> {
+  if (!site.googleRefreshTokenEncrypted) {
+    return { clicks: 0, impressions: 0 };
+  }
+  const { decrypt } = await import("./crypto");
+  const refreshToken = decrypt(site.googleRefreshTokenEncrypted);
+  
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken(refreshToken);
+  } catch (err) {
+    console.error("[GSC Summary] Token refresh failure:", err);
+    return { clicks: 0, impressions: 0 };
+  }
+
+  const propertyUrl = site.gscVerifiedPropertyUrl || site.url;
+  const encodedPropertyUrl = encodeURIComponent(propertyUrl);
+  
+  const startDateStr = startDate.toISOString().split("T")[0];
+  const endDateStr = endDate.toISOString().split("T")[0];
+  
+  const queryUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedPropertyUrl}/searchAnalytics/query`;
+  
+  try {
+    const res = await fetch(queryUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        startDate: startDateStr,
+        endDate: endDateStr,
+      }),
+    });
+    
+    if (!res.ok) {
+      console.warn(`[GSC Summary] API error status ${res.status}`);
+      return { clicks: 0, impressions: 0 };
+    }
+    
+    const data = await res.json();
+    const rows = data.rows || [];
+    let clicks = 0;
+    let impressions = 0;
+    for (const r of rows) {
+      clicks += r.clicks || 0;
+      impressions += r.impressions || 0;
+    }
+    return { clicks, impressions };
+  } catch (err) {
+    console.error("[GSC Summary] Network error:", err);
+    return { clicks: 0, impressions: 0 };
+  }
+}
