@@ -42,7 +42,7 @@ export async function isSafeUrlToFetch(urlStr: string): Promise<boolean> {
     try {
       const result = await lookupAsync(hostname);
       ip = result.address;
-    } catch (err) {
+    } catch {
       console.log(`[UrlSafety] DNS lookup failed for ${hostname}`);
       return false;
     }

@@ -1,14 +1,15 @@
-import { CrawledPage } from "./crawler";
+import { CrawledPage, CrawlResult } from "./crawler";
 import { isSafeUrlToFetch } from "./urlSafety";
 import * as cheerio from "cheerio";
+import crypto from "crypto";
 
 export interface AuditResults {
   scoreSeo: number;
   issues: {
     type: "meta_title" | "meta_description" | "broken_link" | "missing_alt" | "schema_markup" | "heading_structure" | "canonical_tag" | "social_meta" | "insecure_link" | "duplicate_content" | "robots_sitemap" | "image_weight" | "redirect_chain" | "indexability_issue" | "duplicate_image" | "stale_content" | "mobile_viewport_missing" | "hreflang_missing" | "orphan_page" | "missing_security_headers" | "js_rendering_risk" | "generic_anchor_text" | "keyword_stuffing" | "keyword_cannibalization";
     targetUrl: string;
-    currentValue: any;
-    suggestedValue: any;
+    currentValue: unknown;
+    suggestedValue: unknown;
   }[];
 }
 
@@ -46,7 +47,7 @@ async function checkLink(url: string): Promise<{ url: string; isBroken: boolean;
       isBroken: response.status >= 400,
       statusCode: response.status,
     };
-  } catch (err) {
+  } catch {
     return {
       url,
       isBroken: true,
@@ -250,7 +251,7 @@ async function checkSiteWideIssues(pages: CrawledPage[], baseUrl: string): Promi
 }
 
 export async function runSeoAudits(
-  pagesOrResult: CrawledPage[] | any,
+  pagesOrResult: CrawledPage[] | CrawlResult,
   seedUrl: string,
   crawlerUsed?: "cheerio" | "firecrawl"
 ): Promise<AuditResults> {
@@ -647,7 +648,7 @@ export async function runSeoAudits(
           if (!res.ok) return null;
           const arrayBuffer = await res.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
-          const md5Hash = require("crypto").createHash("md5").update(buffer).digest("hex");
+          const md5Hash = crypto.createHash("md5").update(buffer).digest("hex");
           return { url, hash: md5Hash };
         } catch {
           return null;
@@ -987,7 +988,7 @@ export async function checkJsRenderingRisk(
             }
           });
         }
-      } catch (err) {
+      } catch {
         issues.push({
           type: "js_rendering_risk",
           targetUrl: targetPage.url,

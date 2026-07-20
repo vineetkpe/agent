@@ -148,10 +148,10 @@ export async function publishWpPost(
       success: false,
       error: errData.message || `WordPress API returned status ${res.status}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err.message || "Network error connection failed",
+      error: err instanceof Error ? err.message : "Network error connection failed",
     };
   }
 }
@@ -160,7 +160,7 @@ export async function publishWpPost(
  * Normalizes a URL for trailing slash and case comparison.
  */
 function normalizeTrailingSlash(url: string): string {
-  let clean = url.trim().replace(/\/+$/, "");
+  const clean = url.trim().replace(/\/+$/, "");
   return clean.toLowerCase();
 }
 
@@ -295,10 +295,10 @@ export async function updateWpTitle(
       success: false,
       error: errData.message || `WordPress API returned status ${res.status}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err.message || "Network error or connection timeout",
+      error: err instanceof Error ? err.message : "Network error or connection timeout",
     };
   }
 }
@@ -357,10 +357,10 @@ export async function updateWpMetaDescription(
       success: false,
       error: errData.message || `WordPress API returned status ${res.status}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err.message || "Network error or connection timeout",
+      error: err instanceof Error ? err.message : "Network error or connection timeout",
     };
   }
 }
@@ -397,8 +397,8 @@ export async function getWpPost(
       };
     }
     return { success: false, error: `WordPress API returned status ${res.status}` };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Network error" };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Network error" };
   }
 }
 
@@ -433,10 +433,10 @@ export async function deleteWpPost(
       success: false,
       error: errData.message || `WordPress API returned status ${res.status}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err.message || "Network error or connection timeout",
+      error: err instanceof Error ? err.message : "Network error or connection timeout",
     };
   }
 }

@@ -19,7 +19,7 @@ export async function generateContent(prompt: string): Promise<string> {
   return response.text || "";
 }
 
-export async function generateStructuredJson<T>(prompt: string, responseSchema?: any): Promise<T> {
+export async function generateStructuredJson<T>(prompt: string, responseSchema?: Record<string, unknown>): Promise<T> {
   if (!ai) {
     throw new Error("Gemini API client not initialized.");
   }

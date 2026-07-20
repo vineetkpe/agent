@@ -1,4 +1,14 @@
 import { prisma } from "./prisma";
+import { Site } from "@prisma/client";
+
+export interface GscRow {
+  query: string;
+  page?: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
 
 async function getAccessToken(refreshToken: string): Promise<string> {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -30,7 +40,7 @@ async function getAccessToken(refreshToken: string): Promise<string> {
   return data.access_token;
 }
 
-export async function fetchSearchConsoleData(site: any): Promise<any[]> {
+export async function fetchSearchConsoleData(site: Site): Promise<GscRow[]> {
   // Check 24-hour cache first
   const cacheAgeMs = Date.now() - (site.gscLastSyncedAt ? new Date(site.gscLastSyncedAt).getTime() : 0);
   if (site.gscCachedData && cacheAgeMs < 24 * 60 * 60 * 1000) {
@@ -52,12 +62,13 @@ export async function fetchSearchConsoleData(site: any): Promise<any[]> {
   let accessToken: string;
   try {
     accessToken = await getAccessToken(refreshToken);
-  } catch (error: any) {
-    const isInvalidTokenError = error.message && (
-      error.message.includes("invalid_grant") || 
-      error.message.includes("invalid_request") ||
-      error.message.includes("400") ||
-      error.message.includes("401")
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isInvalidTokenError = errorMsg && (
+      errorMsg.includes("invalid_grant") || 
+      errorMsg.includes("invalid_request") ||
+      errorMsg.includes("400") ||
+      errorMsg.includes("401")
     );
     if (isInvalidTokenError) {
       await prisma.site.update({
@@ -111,9 +122,15 @@ export async function fetchSearchConsoleData(site: any): Promise<any[]> {
   const rows = data.rows || [];
   
   // Format rows
-  const queries = rows.map((r: any) => ({
-    query: r.keys[0],
-    page: r.keys[1],
+  const queries = rows.map((r: {
+    keys: string[];
+    clicks?: number;
+    impressions?: number;
+    ctr?: number;
+    position?: number;
+  }) => ({
+    query: r.keys[0] || "",
+    page: r.keys[1] || "",
     clicks: r.clicks || 0,
     impressions: r.impressions || 0,
     ctr: r.ctr || 0,
@@ -121,7 +138,7 @@ export async function fetchSearchConsoleData(site: any): Promise<any[]> {
   }));
   
   // Sort by impressions descending and return top 50
-  queries.sort((a: any, b: any) => b.impressions - a.impressions);
+  queries.sort((a: GscRow, b: GscRow) => b.impressions - a.impressions);
   const top50 = queries.slice(0, 50);
 
   // Update GSC Cache and synced time
@@ -136,7 +153,7 @@ export async function fetchSearchConsoleData(site: any): Promise<any[]> {
   return top50;
 }
 
-export async function fetchGscSummary(site: any, startDate: Date, endDate: Date): Promise<{ clicks: number; impressions: number }> {
+export async function fetchGscSummary(site: Site, startDate: Date, endDate: Date): Promise<{ clicks: number; impressions: number }> {
   if (!site.googleRefreshTokenEncrypted) {
     return { clicks: 0, impressions: 0 };
   }

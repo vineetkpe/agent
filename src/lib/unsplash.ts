@@ -26,7 +26,10 @@ export async function searchRelevantImages(topic: string, count: number = 2): Pr
 
     const data = await res.json();
     const results = data.results || [];
-    return results.slice(0, count).map((photo: any) => ({
+    return results.slice(0, count).map((photo: {
+      urls: { regular: string };
+      user: { name: string; links: { html: string } };
+    }) => ({
       url: photo.urls.regular,
       photographerName: photo.user.name,
       photographerLink: photo.user.links.html,

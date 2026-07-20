@@ -33,7 +33,7 @@ export async function generateContent(prompt: string): Promise<string> {
   return data?.choices?.[0]?.message?.content || "";
 }
 
-export async function generateStructuredJson<T>(prompt: string, responseSchema?: any): Promise<T> {
+export async function generateStructuredJson<T>(prompt: string, responseSchema?: Record<string, unknown>): Promise<T> {
   if (!apiKey || apiKey === "mock-groq-key") {
     throw new Error("Groq API key not configured.");
   }

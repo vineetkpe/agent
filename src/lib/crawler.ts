@@ -69,7 +69,6 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlR
     throw new Error("Invalid start URL provided to crawler.");
   }
   
-  const origin = parsedStartUrl.origin;
   const hostname = parsedStartUrl.hostname;
   
   if (!(await isSafeUrlToFetch(parsedStartUrl.toString()))) {
@@ -257,12 +256,13 @@ export async function crawlSite(startUrl: string, maxPages = 15): Promise<CrawlR
           pages: parsedPages,
           crawlerUsed: "firecrawl"
         };
-      } catch (err: any) {
-        console.error(`[Crawler] Firecrawl fallback failed: ${err.message || err}`);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[Crawler] Firecrawl fallback failed: ${errorMsg}`);
         return {
           pages: cheerioPages,
           crawlerUsed: "cheerio",
-          crawlerWarning: "This site may use JavaScript rendering. Fallback retry failed: " + (err.message || String(err))
+          crawlerWarning: "This site may use JavaScript rendering. Fallback retry failed: " + errorMsg
         };
       }
     } else {

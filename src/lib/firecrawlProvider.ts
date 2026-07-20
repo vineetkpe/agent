@@ -1,7 +1,16 @@
 import * as cheerio from "cheerio";
 import { CrawledPage } from "./crawler";
 
-export async function crawlWithFirecrawl(url: string, limit = 10): Promise<any[]> {
+export interface FirecrawlPage {
+  url: string;
+  html?: string;
+  metadata?: {
+    title?: string;
+    description?: string;
+  };
+}
+
+export async function crawlWithFirecrawl(url: string, limit = 10): Promise<FirecrawlPage[]> {
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey || apiKey === "mock-firecrawl-key") {
     throw new Error("FIRECRAWL_API_KEY is not configured.");
@@ -63,7 +72,7 @@ export async function crawlWithFirecrawl(url: string, limit = 10): Promise<any[]
   throw new Error("Firecrawl crawl job timed out.");
 }
 
-export function parseFirecrawlPage(page: any): CrawledPage {
+export function parseFirecrawlPage(page: FirecrawlPage): CrawledPage {
   const html = page.html || "";
   const $ = cheerio.load(html);
 

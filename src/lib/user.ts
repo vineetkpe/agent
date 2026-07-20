@@ -3,7 +3,7 @@ import { prisma } from "./prisma";
 
 // Mock global WebSocket for Node.js < 22 environments to satisfy Supabase Realtime checks
 if (typeof global.WebSocket === "undefined") {
-  (global as any).WebSocket = class {};
+  (globalThis as unknown as { WebSocket: unknown }).WebSocket = class {};
 }
 
 // Fallback to valid mock URL string format to prevent build evaluation crash

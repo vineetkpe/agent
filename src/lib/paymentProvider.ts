@@ -23,7 +23,7 @@ export interface PaymentProvider {
   createCheckoutSession(params: CheckoutSessionParams): Promise<{ url: string }>;
   createBillingPortalSession(params: BillingPortalSessionParams): Promise<{ url: string }>;
   cancelSubscription(params: CancelSubscriptionParams): Promise<{ success: boolean }>;
-  verifyWebhookSignature(rawBody: string, signature: string): Promise<any>;
+  verifyWebhookSignature(rawBody: string, signature: string): Promise<unknown>;
 }
 
 const mockProvider: PaymentProvider = {
@@ -84,12 +84,12 @@ const mockProvider: PaymentProvider = {
     return { success: true };
   },
 
-  async verifyWebhookSignature(rawBody, signature) {
+  async verifyWebhookSignature(rawBody, _signature) {
     console.log("[Mock Payment] Verifying webhook signature (bypass)");
     try {
       return JSON.parse(rawBody);
-    } catch (err: any) {
-      throw new Error("Invalid payload JSON: " + err.message);
+    } catch (err) {
+      throw new Error("Invalid payload JSON: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 };
@@ -228,7 +228,7 @@ const stripeProvider: PaymentProvider = {
       where: { id: userId },
       data: {
         subscriptionStatus: "canceled",
-        subscriptionEndsAt: new Date((updatedSub as any).current_period_end * 1000),
+        subscriptionEndsAt: new Date((updatedSub as unknown as { current_period_end: number }).current_period_end * 1000),
       },
     });
 

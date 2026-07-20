@@ -9,11 +9,8 @@ interface CachedConfig {
   resolvedAt: number;
 }
 
-let cachedConfig: CachedConfig | null = null;
-const CACHE_TTL_MS = 30 * 1000;
-
 export function clearCachedConfig() {
-  cachedConfig = null;
+  // Config cache not implemented
 }
 
 export function isProviderMock(provider: string): boolean {
@@ -119,9 +116,10 @@ export async function generateContent(prompt: string, userId?: string): Promise<
       const wasFailover = i > 0;
       logApiUsage("generateContent", true, provider, wasFailover, userId);
       return result;
-    } catch (error: any) {
-      console.warn(`[AI Fallback] ${provider} failed: ${error?.message || error}, trying next in chain...`);
-      errors.push({ provider, error: error?.message || String(error) });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[AI Fallback] ${provider} failed: ${errMsg}, trying next in chain...`);
+      errors.push({ provider, error: errMsg });
     }
   }
 
@@ -137,7 +135,7 @@ export async function generateContent(prompt: string, userId?: string): Promise<
  */
 export async function generateStructuredJson<T>(
   prompt: string,
-  responseSchema?: any,
+  responseSchema?: Record<string, unknown>,
   userId?: string
 ): Promise<T> {
   const chain = await getProviderPriorityChain();
@@ -167,9 +165,10 @@ export async function generateStructuredJson<T>(
       const wasFailover = i > 0;
       logApiUsage("generateStructuredJson", true, provider, wasFailover, userId);
       return result;
-    } catch (error: any) {
-      console.warn(`[AI Fallback] ${provider} failed: ${error?.message || error}, trying next in chain...`);
-      errors.push({ provider, error: error?.message || String(error) });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[AI Fallback] ${provider} failed: ${errMsg}, trying next in chain...`);
+      errors.push({ provider, error: errMsg });
     }
   }
 
@@ -270,7 +269,6 @@ function generateMockJson<T>(prompt: string): T {
   if (lowerPrompt.includes("audit") || lowerPrompt.includes("issues") || lowerPrompt.includes("crawled")) {
     let summary = "";
     let category = "";
-    let industry = "";
     let services: string[] = [];
 
     const summaryMatch = prompt.match(/- Summary:\s*(.+)/i);
@@ -278,9 +276,6 @@ function generateMockJson<T>(prompt: string): T {
 
     const categoryMatch = prompt.match(/- Category:\s*(.+)/i);
     if (categoryMatch && categoryMatch[1]) category = categoryMatch[1].trim();
-
-    const industryMatch = prompt.match(/- Industry:\s*(.+)/i);
-    if (industryMatch && industryMatch[1]) industry = industryMatch[1].trim();
 
     const servicesMatch = prompt.match(/- Services:\s*(.+)/i) || prompt.match(/- Services Offered:\s*(.+)/i);
     if (servicesMatch && servicesMatch[1]) {

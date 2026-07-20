@@ -41,7 +41,7 @@ async function loadPlanLimitsFromDb(): Promise<Record<string, PlanLimits>> {
     const parsedLimits: Record<string, PlanLimits> = {};
 
     for (const plan of dbPlans) {
-      const limits: any = {
+      const limits: PlanLimits = {
         maxSites: 1,
         cooldownMinutes: 1440,
         wpAutoApply: false,
@@ -54,7 +54,7 @@ async function loadPlanLimitsFromDb(): Promise<Record<string, PlanLimits>> {
       };
 
       for (const pf of plan.features) {
-        let val: any;
+        let val: unknown;
         try {
           val = typeof pf.value === "string" ? JSON.parse(pf.value) : pf.value;
         } catch {
@@ -63,11 +63,12 @@ async function loadPlanLimitsFromDb(): Promise<Record<string, PlanLimits>> {
 
         const featureKey = pf.featureKey;
         if (pf.feature.type === "number") {
-          limits[featureKey] = typeof val === "number" ? val : parseInt(val, 10);
+          const numVal = typeof val === "number" ? val : parseInt(String(val), 10);
+          (limits as unknown as Record<string, unknown>)[featureKey] = isNaN(numVal) ? 0 : numVal;
         } else if (pf.feature.type === "boolean") {
-          limits[featureKey] = String(val) === "true" || val === true;
+          (limits as unknown as Record<string, unknown>)[featureKey] = String(val) === "true" || val === true;
         } else {
-          limits[featureKey] = val;
+          (limits as unknown as Record<string, unknown>)[featureKey] = val;
         }
       }
 

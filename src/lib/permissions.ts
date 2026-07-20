@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 
 export class ForbiddenError extends Error {
   statusCode = 403;
@@ -12,7 +13,7 @@ export class ForbiddenError extends Error {
  * Validates that the active user possesses one of the required authorization roles.
  * Throws a ForbiddenError (403) if validation fails.
  */
-export function requireRole(user: any, allowedRoles: string[]) {
+export function requireRole(user: { role?: string } | null | undefined, allowedRoles: string[]) {
   const role = user?.role || "user";
   if (!allowedRoles.includes(role)) {
     throw new ForbiddenError(`Forbidden: Access denied. Requires one of the roles: ${allowedRoles.join(", ")}`);
@@ -27,7 +28,7 @@ export async function logAdminAction(
   action: string,
   targetType: string,
   targetId?: string | null,
-  metadata?: any
+  metadata?: Prisma.InputJsonValue
 ) {
   try {
     await prisma.adminActionLog.create({
@@ -37,7 +38,7 @@ export async function logAdminAction(
         action,
         targetType,
         targetId: targetId || null,
-        metadata: metadata || null,
+        metadata: (metadata !== undefined && metadata !== null) ? metadata : Prisma.JsonNull,
       },
     });
   } catch (err) {

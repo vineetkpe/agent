@@ -1,5 +1,5 @@
 import { crawlSite } from "@/lib/crawler";
-import { runSeoAudits, getPageSpeedData, getPriorityScoring } from "@/lib/seoChecks";
+import { runSeoAudits, getPageSpeedData, getPriorityScoring, PageSpeedDataResult } from "@/lib/seoChecks";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +7,7 @@ import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { validateSeoContent } from "@/lib/contentValidator";
 import { sanitizeHtml } from "@/lib/sanitizer";
 import { searchRelevantImages } from "@/lib/unsplash";
+import { Site } from "@prisma/client";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -74,8 +75,44 @@ const geminiResponseSchema = {
   required: ["keywordOpportunities", "fixes", "blogPosts"],
 };
 
+interface GscRow {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+interface AiResponse {
+  keywordOpportunities: {
+    keyword: string;
+    rationale: string;
+    intent: string;
+    position?: number;
+    impressions?: number;
+    clicks?: number;
+    ctr?: number;
+  }[];
+  fixes: {
+    targetUrl: string;
+    type: string;
+    suggestedValue: string;
+  }[];
+  blogPosts: {
+    title: string;
+    content: string;
+    metaDescription: string;
+    wordCount: number;
+    internalLinksUsed: string[];
+    externalLinksUsed: string[];
+    suggestedSchema: string;
+    suggestedSlug: string;
+    targetKeyword: string;
+  }[];
+}
+
 export async function runAuditForSite(
-  site: any,
+  site: Site,
   options?: { isScheduled?: boolean; targetKeyword?: string }
 ) {
   const cleanUrl = site.url;
@@ -102,13 +139,13 @@ export async function runAuditForSite(
     const profile = await analyzeBusinessProfile(crawledPages, cleanUrl, userId);
     businessProfileData = JSON.stringify(profile);
     console.log(`[runAudit] Discovered Business Profile (Confidence: ${profile.confidenceScore}): ${profile.category}`);
-  } catch (biError: any) {
+  } catch (biError) {
     console.error("[runAudit] Business Intelligence layer failure:", biError);
     businessProfileError = biError instanceof Error ? biError.message : String(biError);
   }
 
   // 5. Update Site record
-  const updateData: any = {};
+  const updateData: Partial<Site> = {};
   if (businessProfileData !== null) {
     updateData.businessProfile = businessProfileData;
   }
@@ -136,7 +173,7 @@ export async function runAuditForSite(
   const auditResults = await runSeoAudits(crawledPages, cleanUrl);
 
   // Fetch Google Search Console data if connected
-  let gscSnapshotData: any[] = [];
+  let gscSnapshotData: GscRow[] = [];
   let gscPromptText = "";
   if (updatedSite.gscConnected) {
     try {
@@ -151,9 +188,9 @@ INSTRUCTIONS FOR KEYWORD OPPORTUNITIES:
 2. Suggest keyword opportunities for high-impression but low-CTR (click-through rate) queries, which indicate a metadata or snippet clickability problem rather than a ranking issue.
 3. Every suggestion in 'keywordOpportunities' based on this verified data MUST have its source set to 'gsc_verified' and must include its current average position and impression counts inside the suggested value.
 `;
-    } catch (gscError: any) {
+    } catch (gscError) {
       console.error("[runAudit] Search Console data fetch failed:", gscError);
-      throw new Error(`Google Search Console data fetch failed: ${gscError.message || gscError}`);
+      throw new Error(`Google Search Console data fetch failed: ${gscError instanceof Error ? gscError.message : String(gscError)}`);
     }
   } else {
     gscPromptText = `
@@ -176,7 +213,7 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
   });
 
   // 6. Generate improvements using Gemini AI (AI Scan Step)
-  let aiResponse: any = null;
+  let aiResponse: AiResponse | null = null;
   let aiScanError: string | null = null;
 
   try {
@@ -198,12 +235,12 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
         } : null);
     const productsList = parsedProfile?.products
       ? (Array.isArray(parsedProfile.products)
-          ? parsedProfile.products.map((p: any) => typeof p === "string" ? p : p.name).join(", ")
+          ? parsedProfile.products.map((p: string | { name: string }) => typeof p === "string" ? p : p.name).join(", ")
           : String(parsedProfile.products))
       : "None listed";
     const servicesList = parsedProfile?.services
       ? (Array.isArray(parsedProfile.services)
-          ? parsedProfile.services.map((s: any) => typeof s === "string" ? s : s.name).join(", ")
+          ? parsedProfile.services.map((s: string | { name: string }) => typeof s === "string" ? s : s.name).join(", ")
           : String(parsedProfile.services))
       : "None listed";
     const voiceGuide = parsedProfile?.brandVoice
@@ -321,30 +358,30 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 
     let attempt = 1;
     let validationFailuresMap: Record<number, string[]> = {};
-    let validationChecksMap: Record<number, any> = {};
+    let validationChecksMap: Record<number, unknown> = {};
     let hasFailures = false;
 
     while (attempt <= 2) {
       let currentPrompt = systemPrompt;
       if (attempt === 2) {
         const failureText = Object.entries(validationFailuresMap)
-          .map(([idx, fails]) => `Blog Post #${Number(idx) + 1} ("${aiResponse.blogPosts[idx]?.title || "Untitled"}") failed the following SEO rules:\n${fails.map(f => `- ${f}`).join("\n")}`)
+          .map(([idx, fails]) => `Blog Post #${Number(idx) + 1} ("${aiResponse?.blogPosts[Number(idx)]?.title || "Untitled"}") failed the following SEO rules:\n${fails.map(f => `- ${f}`).join("\n")}`)
           .join("\n\n");
         
         currentPrompt += `\n\n[WARNING] Your previous generation attempt failed validation:\n${failureText}\n\nPlease correct all listed errors and resubmit the complete, corrected JSON. Ensure all constraints (title length, meta length, word count, H1, internal/external links) are fully met.`;
       }
 
-      aiResponse = await generateStructuredJson<any>(currentPrompt, geminiResponseSchema, userId);
+      aiResponse = await generateStructuredJson<AiResponse>(currentPrompt, geminiResponseSchema, userId);
       
       validationFailuresMap = {};
       validationChecksMap = {};
       hasFailures = false;
 
-      if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
+      if (aiResponse && aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
         for (let i = 0; i < aiResponse.blogPosts.length; i++) {
           const post = aiResponse.blogPosts[i];
           const opp = aiResponse.keywordOpportunities?.find(
-            (o: any) => o.keyword === post.targetKeyword
+            (o: { keyword: string; intent?: string }) => o.keyword === post.targetKeyword
           );
           const intent = opp ? opp.intent : "informational";
           
@@ -372,7 +409,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     }
 
     // Save Page/Meta/Alt/Link Fixes
-    if (aiResponse.fixes && aiResponse.fixes.length > 0) {
+    if (aiResponse && aiResponse.fixes && aiResponse.fixes.length > 0) {
       for (const fix of aiResponse.fixes) {
         const relatedIssue = auditResults.issues.find(
           (issue) => issue.targetUrl === fix.targetUrl && issue.type === fix.type
@@ -398,7 +435,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     }
 
     // Save Blog Post suggestions
-    if (aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
+    if (aiResponse && aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
       for (let i = 0; i < aiResponse.blogPosts.length; i++) {
         const post = aiResponse.blogPosts[i];
         const sanitizedContent = sanitizeHtml(post.content);
@@ -475,7 +512,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
               externalLinksUsed: post.externalLinksUsed,
               suggestedSchema: post.suggestedSchema,
               validation: validationChecksMap[i] ? {
-                ...validationChecksMap[i],
+                ...(validationChecksMap[i] as Record<string, unknown>),
                 failures: validationFailuresMap[i] || [],
               } : null,
             }),
@@ -490,7 +527,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     }
 
     // Save Keyword Opportunities
-    if (aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
+    if (aiResponse && aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
       for (const opp of aiResponse.keywordOpportunities) {
         const matchedGsc = updatedSite.gscConnected
           ? gscSnapshotData.find(g => g.query.toLowerCase().trim() === opp.keyword.toLowerCase().trim())
@@ -498,7 +535,15 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         
         const source = matchedGsc ? "gsc_verified" : "ai_suggested";
         
-        const suggestedValueObj: any = {
+        const suggestedValueObj: {
+          keyword: string;
+          rationale: string;
+          intent: string;
+          position?: number;
+          impressions?: number;
+          clicks?: number;
+          ctr?: number;
+        } = {
           keyword: opp.keyword,
           rationale: opp.rationale,
           intent: opp.intent,
@@ -529,9 +574,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         });
       }
     }
-  } catch (aiError: any) {
+  } catch (aiError) {
     console.error("[runAudit] AI step failed:", aiError);
-    aiScanError = aiError?.message || "AI scan step failed.";
+    aiScanError = aiError instanceof Error ? aiError.message : String(aiError);
   }
 
   // Save mechanical/informational issues directly
@@ -540,12 +585,14 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       ["insecure_link", "image_weight", "robots_sitemap", "mobile_viewport_missing", "hreflang_missing", "orphan_page", "missing_security_headers", "js_rendering_risk", "generic_anchor_text"].includes(issue.type)
     );
     for (const issue of directIssues) {
-      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml") {
+      const currVal = issue.currentValue as { path?: string } | null | undefined;
+      const suggVal = issue.suggestedValue as { action?: string } | null | undefined;
+      if (issue.type === "robots_sitemap" && currVal?.path === "/sitemap.xml") {
         continue;
       }
       
-      let suggestedText = issue.suggestedValue?.action || issue.suggestedValue;
-      if (issue.type === "robots_sitemap" && issue.currentValue?.path === "/robots.txt") {
+      let suggestedText = suggVal?.action || (typeof issue.suggestedValue === "string" ? issue.suggestedValue : "");
+      if (issue.type === "robots_sitemap" && currVal?.path === "/robots.txt") {
         suggestedText = `Create a robots.txt file at ${cleanUrl}/robots.txt with: \n\nUser-agent: *\nAllow: /\n\nSitemap: ${cleanUrl}/sitemap.xml`;
       }
 
@@ -567,7 +614,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     }
 
     const hasSitemapIssue = auditResults.issues.some(
-      (issue) => issue.type === "robots_sitemap" && issue.currentValue?.path === "/sitemap.xml"
+      (issue) => {
+        const currVal = issue.currentValue as { path?: string } | null | undefined;
+        return issue.type === "robots_sitemap" && currVal?.path === "/sitemap.xml";
+      }
     );
     if (hasSitemapIssue) {
       const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
@@ -594,15 +644,15 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
   }
 
   // Google PageSpeed Insights Step
-  let psData: any = null;
+  let psData: PageSpeedDataResult | null = null;
   let pageSpeedScanError: string | null = null;
 
   try {
     console.log(`[runAudit] Running PageSpeed Insights scan for: ${cleanUrl}`);
     psData = await getPageSpeedData(cleanUrl);
-  } catch (psiError: any) {
+  } catch (psiError) {
     console.error("[runAudit] PageSpeed step failed:", psiError);
-    pageSpeedScanError = psiError?.message || "Google PageSpeed Insights scan step failed.";
+    pageSpeedScanError = psiError instanceof Error ? psiError.message : String(psiError);
   }
 
   // Generate internal linking suggestions if AI succeeded

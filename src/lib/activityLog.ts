@@ -1,10 +1,11 @@
 import { prisma } from "./prisma";
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 
 export async function logActivity(
   userId: string,
   action: string,
-  metadata?: any,
+  metadata?: Prisma.InputJsonValue,
   req?: Request
 ) {
   try {
@@ -19,7 +20,7 @@ export async function logActivity(
         const nextHeaders = await headers();
         ipAddress = nextHeaders.get("x-forwarded-for") || nextHeaders.get("x-real-ip");
         userAgent = nextHeaders.get("user-agent");
-      } catch (e) {
+      } catch {
         // Quietly fail when invoked outside request boundary (e.g. cron triggers)
       }
     }
@@ -32,7 +33,7 @@ export async function logActivity(
       data: {
         userId,
         action,
-        metadata: metadata || null,
+        metadata: (metadata !== undefined && metadata !== null) ? metadata : Prisma.JsonNull,
         ipAddress,
         userAgent,
       },

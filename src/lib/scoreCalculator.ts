@@ -14,7 +14,15 @@
  *      Each subtracts 2 points.
  * 3. Clamp final score between 0 and 100.
  */
-export function calculateSeoHealthScore(audit: any): number {
+interface ScoreAuditInput {
+  scorePerformance?: number | null;
+  scoreSeoGoogle?: number | null;
+  scoreAccessibility?: number | null;
+  scoreBestPractices?: number | null;
+  items?: { status: string; type: string }[] | null;
+}
+
+export function calculateSeoHealthScore(audit: ScoreAuditInput | null | undefined): number {
   if (!audit) return 0;
 
   const scores: number[] = [audit.scorePerformance || 0];
@@ -70,8 +78,8 @@ export function calculateSeoHealthScore(audit: any): number {
  *      - change === 0: "neutral"
  */
 export function calculateGrowthScore(
-  currentAudit: any,
-  previousAudit?: any | null,
+  currentAudit: ScoreAuditInput | null | undefined,
+  previousAudit?: ScoreAuditInput | null,
   gscTrend?: { clicksChange: number } | null
 ): "positive" | "neutral" | "negative" {
   if (!currentAudit) return "neutral";

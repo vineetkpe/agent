@@ -1,7 +1,7 @@
-import { prisma } from "./prisma";
 import { decrypt } from "./crypto";
+import { Site } from "@prisma/client";
 
-async function getGaAccessToken(site: any): Promise<string> {
+async function getGaAccessToken(site: Site): Promise<string> {
   if (!site.googleRefreshTokenEncrypted) {
     throw new Error("Google refresh token is missing. Please connect Google first.");
   }
@@ -90,7 +90,7 @@ export async function findMatchingGaProperty(accessToken: string, siteUrl: strin
   return null;
 }
 
-export async function fetchAnalyticsData(site: any) {
+export async function fetchAnalyticsData(site: Site) {
   if (!site.gaPropertyId) {
     throw new Error("Google Analytics property ID is missing.");
   }
@@ -191,7 +191,10 @@ export async function fetchAnalyticsData(site: any) {
   }
 
   const landingPagesData = await landingPagesRes.json();
-  const landingPages = (landingPagesData.rows || []).map((row: any) => ({
+  const landingPages = (landingPagesData.rows || []).map((row: {
+    dimensionValues?: { value?: string }[] | null;
+    metricValues?: { value?: string }[] | null;
+  }) => ({
     path: row.dimensionValues?.[0]?.value || "/",
     sessions: parseInt(row.metricValues?.[0]?.value || "0", 10),
     users: parseInt(row.metricValues?.[1]?.value || "0", 10),
@@ -204,7 +207,7 @@ export async function fetchAnalyticsData(site: any) {
   };
 }
 
-export async function fetchDailySessions(site: any, startDate: Date, endDate: Date): Promise<Record<string, number>> {
+export async function fetchDailySessions(site: Site, startDate: Date, endDate: Date): Promise<Record<string, number>> {
   if (!site.gaPropertyId) {
     return {};
   }
