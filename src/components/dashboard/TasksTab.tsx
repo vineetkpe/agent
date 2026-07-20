@@ -122,12 +122,14 @@ AI Recommendation Suggestion: ${item.suggestedValue || "None"}`;
                             </td>
                             <td className="py-3 px-3 text-center">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide inline-block ${
+                                item.status === "applied" && item.autoAppliedAt ? "bg-indigo-50 text-indigo-600 border border-indigo-100" :
                                 item.status === "applied" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
                                 item.status === "rolled_back" ? "bg-zinc-100 text-zinc-500 border border-zinc-200" :
                                 item.status === "approved" ? "bg-amber-50 text-amber-600 border border-amber-100" :
                                 "bg-amber-50 text-amber-500 border border-amber-100"
                               }`}>
-                                {item.status === "applied" ? "Applied" :
+                                {item.status === "applied" && item.autoAppliedAt ? "Auto-Applied" :
+                                 item.status === "applied" ? "Applied" :
                                  item.status === "rolled_back" ? "Rolled Back" :
                                  item.status === "approved" ? "Approved" : "Pending"}
                               </span>

@@ -65,7 +65,7 @@ export const ContentTab: React.FC<ContentTabProps> = ({
                       </span>
                     ) : isApplied ? (
                       <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        Pushed to CMS
+                        {item.autoAppliedAt ? "Auto-Applied" : "Pushed to CMS"}
                       </span>
                     ) : isApproved ? (
                       <span className="text-[9px] uppercase tracking-wider font-bold text-violet-600 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">

@@ -351,12 +351,13 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                       {details.impact} Impact
                     </span>
 
-                    {isApplied && <Badge variant="emerald">Live on Site</Badge>}
+                    {isApplied && item.autoAppliedAt && <Badge variant="violet">Auto-applied</Badge>}
+                    {isApplied && !item.autoAppliedAt && <Badge variant="emerald">Live on Site</Badge>}
                     {item.status === "rolled_back" && <Badge variant="zinc">Rolled Back</Badge>}
                     {isApproved && <Badge variant="amber">Approved -- Manual Action Needed</Badge>}
                     {isRejected && <Badge variant="zinc">Rejected</Badge>}
                     {item.status === "pending" && (
-                      <Badge variant="amber" className="animate-pulse">Pending Review</Badge>
+                      <Badge variant="amber" className="animate-pulse">Awaiting your approval</Badge>
                     )}
 
                     <button

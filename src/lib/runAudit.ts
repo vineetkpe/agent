@@ -1,5 +1,5 @@
 import { crawlSite } from "@/lib/crawler";
-import { runSeoAudits, getPageSpeedData, getPriorityScoring, PageSpeedDataResult } from "@/lib/seoChecks";
+import { runSeoAudits, getPageSpeedData, getPriorityScoring, getRiskLevel, PageSpeedDataResult } from "@/lib/seoChecks";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { analyzeBusinessProfile } from "@/lib/businessIntelligence";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +7,10 @@ import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { validateSeoContent } from "@/lib/contentValidator";
 import { sanitizeHtml } from "@/lib/sanitizer";
 import { searchRelevantImages } from "@/lib/unsplash";
-import { Site } from "@prisma/client";
+import { applyAuditItemFix } from "@/lib/fixApplier";
+import { Site, User, AuditItem } from "@prisma/client";
+import { getEffectivePlanLimits } from "@/lib/planLimits";
+import { logActivity } from "@/lib/activityLog";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -120,6 +123,10 @@ export async function runAuditForSite(
   const targetKeyword = options?.targetKeyword;
 
   console.log(`[runAudit] Starting audit pipeline for: ${cleanUrl}`);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
 
   // 3. Run crawler
   const crawlResult = await crawlSite(cleanUrl, 10); // cap at 10 pages for speed/testing
@@ -417,7 +424,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         const currentValue = relatedIssue ? JSON.stringify(relatedIssue.currentValue) : "";
 
         const scores = getPriorityScoring(fix.type);
-        await prisma.auditItem.create({
+        const createdItem = await prisma.auditItem.create({
           data: {
             auditId: audit.id,
             siteId: site.id,
@@ -429,8 +436,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             priority: scores.priority,
             impactScore: scores.impactScore,
             difficultyScore: scores.difficultyScore,
+            riskLevel: getRiskLevel(fix.type),
           },
         });
+        await handleAutoApply(createdItem, site, user);
       }
     }
 
@@ -494,7 +503,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         }
 
         const scores = getPriorityScoring("blog_post");
-        await prisma.auditItem.create({
+        const createdItem = await prisma.auditItem.create({
           data: {
             auditId: audit.id,
             siteId: site.id,
@@ -521,8 +530,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             priority: scores.priority,
             impactScore: scores.impactScore,
             difficultyScore: scores.difficultyScore,
+            riskLevel: getRiskLevel("blog_post"),
           },
         });
+        await handleAutoApply(createdItem, site, user);
       }
     }
 
@@ -557,7 +568,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         }
 
         const scores = getPriorityScoring("keyword_opportunity");
-        await prisma.auditItem.create({
+        const createdItem = await prisma.auditItem.create({
           data: {
             auditId: audit.id,
             siteId: site.id,
@@ -570,8 +581,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             priority: scores.priority,
             impactScore: scores.impactScore,
             difficultyScore: scores.difficultyScore,
+            riskLevel: getRiskLevel("keyword_opportunity"),
           },
         });
+        await handleAutoApply(createdItem, site, user);
       }
     }
   } catch (aiError) {
@@ -597,7 +610,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       }
 
       const scores = getPriorityScoring(issue.type);
-      await prisma.auditItem.create({
+      const createdItem = await prisma.auditItem.create({
         data: {
           auditId: audit.id,
           siteId: site.id,
@@ -609,8 +622,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           priority: scores.priority,
           impactScore: scores.impactScore,
           difficultyScore: scores.difficultyScore,
+          riskLevel: getRiskLevel(issue.type),
         },
       });
+      await handleAutoApply(createdItem, site, user);
     }
 
     const hasSitemapIssue = auditResults.issues.some(
@@ -624,7 +639,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
       
       const scores = getPriorityScoring("robots_sitemap");
-      await prisma.auditItem.create({
+      const createdItem = await prisma.auditItem.create({
         data: {
           auditId: audit.id,
           siteId: site.id,
@@ -636,8 +651,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           priority: scores.priority,
           impactScore: scores.impactScore,
           difficultyScore: scores.difficultyScore,
+          riskLevel: getRiskLevel("robots_sitemap"),
         },
       });
+      await handleAutoApply(createdItem, site, user);
     }
   } catch (saveErr) {
     console.error("[runAudit] Direct issues save failed:", saveErr);
@@ -706,7 +723,7 @@ Provide suggestions as a JSON object matching this schema:
       if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
         for (const sug of linkingResponse.suggestions) {
           const scores = getPriorityScoring("internal_linking");
-          await prisma.auditItem.create({
+          const createdItem = await prisma.auditItem.create({
             data: {
               auditId: audit.id,
               siteId: site.id,
@@ -722,8 +739,10 @@ Provide suggestions as a JSON object matching this schema:
               priority: scores.priority,
               impactScore: scores.impactScore,
               difficultyScore: scores.difficultyScore,
+              riskLevel: getRiskLevel("internal_linking"),
             },
           });
+          await handleAutoApply(createdItem, site, user);
         }
       }
     } catch (linkErr) {
@@ -755,4 +774,36 @@ Provide suggestions as a JSON object matching this schema:
   console.log(`[Email Notification] Sending ready alert: Hello! Your audit for ${cleanUrl} is ready. View fixes here: http://localhost:3000/dashboard`);
 
   return completedAudit;
+}
+
+async function handleAutoApply(
+  item: AuditItem,
+  site: Site,
+  user: User | null
+) {
+  if (!user) return;
+  if (getRiskLevel(item.type) !== "low") return;
+  if (!site.wpUrl || !site.wpUsername || !site.wpAppPasswordEncrypted) return;
+
+  const limits = getEffectivePlanLimits(user);
+  if (!limits.wpAutoApply) return;
+
+  try {
+    console.log(`[Auto-Apply] Running auto-apply for low-risk audit item ${item.id} (${item.type})`);
+    const result = await applyAuditItemFix(item, site, user, "auto");
+    if ("error" in result) {
+      console.error(`[Auto-Apply Failed] Item ${item.id}:`, result.error);
+    } else {
+      console.log(`[Auto-Apply Success] Applied item ${item.id} successfully.`);
+      await logActivity(user.id, "wp_publish", {
+        siteId: site.id,
+        itemId: item.id,
+        type: item.type,
+        wpLink: "wpLink" in result ? result.wpLink : undefined,
+        autoApplied: true,
+      });
+    }
+  } catch (err) {
+    console.error(`[Auto-Apply Exception] Critical error auto-applying item ${item.id}:`, err);
+  }
 }

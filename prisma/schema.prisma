@@ -106,6 +106,8 @@ model AuditItem {
   status         String    @default("pending") // pending | approved | rejected | applied
   appliedAt      DateTime?
   rolledBackAt   DateTime?
+  autoAppliedAt  DateTime?
+  riskLevel      String    @default("high")
   errorMessage   String?
   wpPostId       String?
   source         String?   // "gsc_verified" | "ai_suggested"

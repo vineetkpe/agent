@@ -1215,3 +1215,35 @@ export function getPriorityScoring(type: string): { priority: "critical" | "high
     difficultyScore: match.difficulty
   };
 }
+
+export function getRiskLevel(type: string): "low" | "high" {
+  const RISK_MAP: Record<string, "low" | "high"> = {
+    meta_title: "low",
+    meta_description: "low",
+    missing_alt: "low",
+    schema_markup: "low",
+    broken_link: "low",
+    image_weight: "low",
+    canonical_tag: "low",
+    social_meta: "low",
+    robots_sitemap: "low",
+    redirect_chain: "low",
+    indexability_issue: "low",
+    duplicate_image: "low",
+    mobile_viewport_missing: "low",
+    hreflang_missing: "low",
+    missing_security_headers: "low",
+    orphan_page: "low",
+    
+    blog_post: "high",
+    heading_structure: "high",
+    duplicate_content: "high",
+    stale_content: "high",
+    keyword_stuffing: "high",
+    keyword_cannibalization: "high",
+    generic_anchor_text: "high",
+    insecure_link: "high",
+    js_rendering_risk: "high",
+  };
+  return RISK_MAP[type] || "high";
+}
