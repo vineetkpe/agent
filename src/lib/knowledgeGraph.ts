@@ -128,3 +128,48 @@ export function buildKnowledgeGraph(
 
   return { nodes, edges };
 }
+
+export interface MissingInternalLink {
+  sourceUrl: string;
+  targetUrl: string;
+  anchorText: string;
+  reason: string;
+}
+
+export function findMissingInternalLinks(graph: KnowledgeGraph): MissingInternalLink[] {
+  const missingLinks: MissingInternalLink[] = [];
+
+  // Get all target nodes of type service or product that have a URL
+  const targets = graph.nodes.filter(
+    (n) => (n.type === "service" || n.type === "product") && n.url
+  );
+
+  for (const target of targets) {
+    const targetUrl = target.url!;
+    
+    // Find all pages that mention / are about this target
+    const aboutEdges = graph.edges.filter(
+      (e) => e.to === target.id && (e.relation === "about_product" || e.relation === "about_service")
+    );
+
+    for (const edge of aboutEdges) {
+      const sourceUrl = edge.from;
+
+      // Check if there is already an actual hyperlink (links_to) from sourceUrl to targetUrl
+      const linksToExists = graph.edges.some(
+        (e) => e.from === sourceUrl && e.to === targetUrl && e.relation === "links_to"
+      );
+
+      if (!linksToExists) {
+        missingLinks.push({
+          sourceUrl,
+          targetUrl,
+          anchorText: target.title, // suggested anchor text
+          reason: `Page ${sourceUrl} discusses '${target.title}' but does not link to its page at ${targetUrl}.`,
+        });
+      }
+    }
+  }
+
+  return missingLinks;
+}

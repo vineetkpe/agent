@@ -99,7 +99,7 @@ model AuditItem {
   audit          Audit     @relation(fields: [auditId], references: [id], onDelete: Cascade)
   siteId         String
   site           Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  type           String    // "meta_title" | "meta_description" | "blog_post" | "broken_link" | "missing_alt" | "schema_markup"
+  type           String    // "meta_title" | "meta_description" | "blog_post" | "broken_link" | "missing_alt" | "schema_markup" | "faq_section" | "missing_internal_link"
   targetUrl      String
   currentValue   String?   // Store HTML, text or json
   suggestedValue String?   // Store recommended title, content, etc.

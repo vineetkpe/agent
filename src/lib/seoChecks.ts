@@ -6,7 +6,7 @@ import crypto from "crypto";
 export interface AuditResults {
   scoreSeo: number;
   issues: {
-    type: "meta_title" | "meta_description" | "broken_link" | "missing_alt" | "schema_markup" | "heading_structure" | "canonical_tag" | "social_meta" | "insecure_link" | "duplicate_content" | "robots_sitemap" | "image_weight" | "redirect_chain" | "indexability_issue" | "duplicate_image" | "stale_content" | "mobile_viewport_missing" | "hreflang_missing" | "orphan_page" | "missing_security_headers" | "js_rendering_risk" | "generic_anchor_text" | "keyword_stuffing" | "keyword_cannibalization";
+    type: "meta_title" | "meta_description" | "broken_link" | "missing_alt" | "schema_markup" | "heading_structure" | "canonical_tag" | "social_meta" | "insecure_link" | "duplicate_content" | "robots_sitemap" | "image_weight" | "redirect_chain" | "indexability_issue" | "duplicate_image" | "stale_content" | "mobile_viewport_missing" | "hreflang_missing" | "orphan_page" | "missing_security_headers" | "js_rendering_risk" | "generic_anchor_text" | "keyword_stuffing" | "keyword_cannibalization" | "faq_section" | "missing_internal_link";
     targetUrl: string;
     currentValue: unknown;
     suggestedValue: unknown;
@@ -1207,6 +1207,8 @@ export function getPriorityScoring(type: string): { priority: "critical" | "high
     keyword_stuffing: { priority: "high", impact: 8, difficulty: 3 },
     keyword_cannibalization: { priority: "high", impact: 7, difficulty: 4 },
     keyword_opportunity: { priority: "high", impact: 8, difficulty: 4 },
+    faq_section: { priority: "medium", impact: 6, difficulty: 4 },
+    missing_internal_link: { priority: "medium", impact: 5, difficulty: 2 },
   };
   const match = PRIORITY_MAP[type] || { priority: "low", impact: 1, difficulty: 1 };
   return {
@@ -1244,6 +1246,8 @@ export function getRiskLevel(type: string): "low" | "high" {
     generic_anchor_text: "high",
     insecure_link: "high",
     js_rendering_risk: "high",
+    faq_section: "high",
+    missing_internal_link: "high",
   };
   return RISK_MAP[type] || "high";
 }

@@ -11,6 +11,7 @@ import { applyAuditItemFix } from "@/lib/fixApplier";
 import { Site, User, AuditItem } from "@prisma/client";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { logActivity } from "@/lib/activityLog";
+import * as cheerio from "cheerio";
 
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
@@ -34,8 +35,9 @@ const geminiResponseSchema = {
         type: "OBJECT",
         properties: {
           targetUrl: { type: "STRING" },
-          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link", "heading_structure", "canonical_tag", "social_meta", "duplicate_content"] },
+          type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link", "heading_structure", "canonical_tag", "social_meta", "duplicate_content", "faq_section"] },
           suggestedValue: { type: "STRING" },
+          suggestedBodyReplacement: { type: "STRING" },
         },
         required: ["targetUrl", "type", "suggestedValue"],
       },
@@ -100,6 +102,7 @@ interface AiResponse {
     targetUrl: string;
     type: string;
     suggestedValue: string;
+    suggestedBodyReplacement?: string;
   }[];
   blogPosts: {
     title: string;
@@ -158,14 +161,16 @@ export async function runAuditForSite(
   }
   
   // Build and attach the knowledge graph
+  let missingLinks: any[] = [];
   try {
     const activeProfile = businessProfileData 
       ? JSON.parse(businessProfileData) 
       : (site.businessProfile ? JSON.parse(site.businessProfile) : null);
     if (activeProfile) {
-      const { buildKnowledgeGraph } = await import("./knowledgeGraph");
+      const { buildKnowledgeGraph, findMissingInternalLinks } = await import("./knowledgeGraph");
       const graph = buildKnowledgeGraph(crawledPages, activeProfile);
       updateData.knowledgeGraphData = JSON.stringify(graph);
+      missingLinks = findMissingInternalLinks(graph);
     }
   } catch (kgErr) {
     console.error("[runAudit] Failed to build knowledge graph:", kgErr);
@@ -178,6 +183,51 @@ export async function runAuditForSite(
 
   // 6. Run local SEO audits
   const auditResults = await runSeoAudits(crawledPages, cleanUrl);
+
+  // Detect candidate pages for FAQ section
+  try {
+    const biProfile = updatedSite.businessProfile ? JSON.parse(updatedSite.businessProfile) : null;
+    if (biProfile) {
+      const isServiceOrProductPage = (page: any, profile: any) => {
+        const urlLower = page.url.toLowerCase();
+        const titleLower = (page.title || "").toLowerCase();
+        
+        if (urlLower.includes("/service") || urlLower.includes("/product") || urlLower.includes("/our-work") || urlLower.includes("/what-we-do")) {
+          return true;
+        }
+        
+        const products = profile.products || [];
+        const services = profile.services || [];
+        
+        for (const item of [...products, ...services]) {
+          const name = typeof item === "string" ? item : item?.name;
+          if (!name) continue;
+          const nameLower = name.toLowerCase();
+          if (titleLower.includes(nameLower)) {
+            return true;
+          }
+          if (item.sourceUrl && item.sourceUrl.toLowerCase() === urlLower) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      for (const page of crawledPages) {
+        const hasFaqSchema = page.schemas.some(s => s.toLowerCase().includes("faqpage"));
+        if (!hasFaqSchema && isServiceOrProductPage(page, biProfile)) {
+          auditResults.issues.push({
+            type: "faq_section",
+            targetUrl: page.url,
+            currentValue: "No FAQ section or FAQPage schema detected.",
+            suggestedValue: null as any
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[runAudit] FAQ page detection error:", err);
+  }
 
   // Fetch Google Search Console data if connected
   let gscSnapshotData: GscRow[] = [];
@@ -218,6 +268,37 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
       crawlerWarning,
     },
   });
+
+  // Save missing internal link suggestions as AuditItems
+  try {
+    for (const link of missingLinks) {
+      const scores = getPriorityScoring("missing_internal_link");
+      await prisma.auditItem.create({
+        data: {
+          auditId: audit.id,
+          siteId: site.id,
+          type: "missing_internal_link",
+          targetUrl: link.sourceUrl, // source page URL where the link should go
+          currentValue: JSON.stringify({
+            mentionedTopic: link.anchorText,
+            targetUrl: link.targetUrl
+          }),
+          suggestedValue: JSON.stringify({
+            toUrl: link.targetUrl,
+            anchorText: link.anchorText,
+            reason: link.reason
+          }),
+          status: "pending",
+          priority: scores.priority,
+          impactScore: scores.impactScore,
+          difficultyScore: scores.difficultyScore,
+          riskLevel: getRiskLevel("missing_internal_link"),
+        },
+      });
+    }
+  } catch (saveKgErr) {
+    console.error("[runAudit] Failed to save missing internal links:", saveKgErr);
+  }
 
   // 6. Generate improvements using Gemini AI (AI Scan Step)
   let aiResponse: AiResponse | null = null;
@@ -283,9 +364,16 @@ If the goals include 'more_traffic', suggest high-volume informational keywords 
       ? `\nCRITICAL REQUIRED TARGET KEYWORD: You MUST write one of the blog posts targeting the primary keyword "${targetKeyword}". This keyword must be the primary focus of that blog post.\n`
       : "";
 
+    const detectedLang = parsedProfile?.languageDetected || "en";
+    const languageInstruction = (detectedLang && detectedLang !== "en")
+      ? `\nCRITICAL LANGUAGE REQUIREMENT: The detected language of this website is "${detectedLang}". You MUST write all generated content (blog posts, titles, headers, body text, meta suggestions, alt text, and FAQ questions/answers) in this language ("${detectedLang}"). Do NOT write them in English.\n`
+      : "";
+
     const systemPrompt = `
 You are an expert AI Website Growth Agent specializing in Local Business SEO and Content Marketing.
 We have audited the website: ${cleanUrl}.
+
+${languageInstruction}
 
 ${goalsBiasText}
 
@@ -336,7 +424,7 @@ ${JSON.stringify(
 
 Based on this audit data, please generate:
 1. A list of 3-5 'quick win' keyword opportunities specific to this business, each containing the keyword phrase, why it's realistically winnable soon (long-tail, local-intent, low apparent competition, directly matches a service/product this business actually offers per its crawled content/business profile), and estimated intent (informational vs transactional).
-2. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', or 'duplicate_content' issue.
+2. Exact fix suggestions for each page with a 'meta_title', 'meta_description', 'schema_markup', 'missing_alt', 'broken_link', 'heading_structure', 'canonical_tag', 'social_meta', 'duplicate_content', or 'faq_section' issue.
    - For 'meta_title' issues: Provide an optimized title tag between 30 and 60 characters.
    - For 'meta_description' issues: Provide an optimized meta description between 120 and 160 characters.
    - For 'schema_markup' issues: Provide a valid schema.org JSON-LD markup string. Select the correct schema type based on the actual page content and catalog: a product page -> Product schema, a service page -> Service schema, a page with Q&A -> FAQPage schema, any page (site-level) -> Organization schema, BreadcrumbList schema if clear page hierarchy exists. Never generate a type that doesn't match the page content (e.g. no Product schema on blog posts).
@@ -345,7 +433,8 @@ Based on this audit data, please generate:
    - For 'heading_structure' issues: Provide a corrected heading structure outline suggestion (e.g. H1: title, H2: subtitle).
    - For 'canonical_tag' issues: Provide the corrected self-referencing HTML canonical snippet link.
    - For 'social_meta' issues: Provide the missing OpenGraph / Twitter meta HTML snippets (og:title, og:description, etc.).
-   - For 'duplicate_content' issues: Provide a suggested unique title or meta description alternative to resolve duplication.
+   - For 'duplicate_content' issues: Provide a suggested unique title or meta description alternative in 'suggestedValue' to resolve duplication, AND provide a rewritten, unique version of the duplicated body content section in 'suggestedBodyReplacement' that is grounded in the page's real topic.
+   - For 'faq_section' issues: Generate 4-6 real question/answer pairs grounded in the actual business profile (its products, services, location, and USPs). Format the Q&A as human-readable HTML (using <h3> for questions and <p> for answers). Alongside this human-readable HTML, generate and append a valid schema.org FAQPage JSON-LD block wrapped in a <script type="application/ld+json">...</script> tag. All content must be specifically about the business and its offerings, never generic placeholder text.
    Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly.
 3. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->). Each blog post must be built around one of the identified quick-win keywords.
 
@@ -355,7 +444,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     { "keyword": "string", "rationale": "string", "intent": "informational" | "transactional" }
   ],
   "fixes": [
-    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content", "suggestedValue": "string" }
+    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content" | "faq_section", "suggestedValue": "string", "suggestedBodyReplacement": "string" }
   ],
   "blogPosts": [
     { "title": "string", "content": "string", "suggestedSlug": "string", "targetKeyword": "string" }
@@ -423,6 +512,48 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         );
         const currentValue = relatedIssue ? JSON.stringify(relatedIssue.currentValue) : "";
 
+        let suggestedValueText = fix.suggestedValue;
+        if (fix.type === "duplicate_content" && fix.suggestedBodyReplacement) {
+          suggestedValueText = `Suggested unique meta/title alternative: ${fix.suggestedValue}\n\nSuggested unique body replacement:\n${fix.suggestedBodyReplacement}`;
+        } else if (fix.type === "social_meta") {
+          // Check if og:image was missing
+          const page = crawledPages.find(p => p.url === fix.targetUrl);
+          const isMissingOgImage = page?.rawHtml 
+            ? !cheerio.load(page.rawHtml)('meta[property="og:image"]').attr("content") && !cheerio.load(page.rawHtml)('meta[name="og:image"]').attr("content")
+            : true;
+          
+          if (isMissingOgImage) {
+            let selectedImgUrl = "";
+            const pageImages = page?.images || [];
+            if (pageImages.length > 0) {
+              const firstImg = pageImages.find(img => img.src && !img.src.includes("logo") && !img.src.includes("icon"));
+              const chosenImg = firstImg || pageImages[0];
+              if (chosenImg?.src) {
+                try {
+                  selectedImgUrl = new URL(chosenImg.src, fix.targetUrl).toString();
+                } catch {
+                  selectedImgUrl = chosenImg.src;
+                }
+              }
+            }
+            if (!selectedImgUrl) {
+              try {
+                const queryTerm = page?.title || targetKeyword || "business";
+                const images = await searchRelevantImages(queryTerm, 1);
+                if (images.length > 0) {
+                  selectedImgUrl = images[0].url;
+                }
+              } catch (unsplashErr) {
+                console.error("[runAudit] Failed to search image for og:image:", unsplashErr);
+              }
+            }
+            if (selectedImgUrl) {
+              const ogImageSnippet = `\n<meta property="og:image" content="${selectedImgUrl}" />\n<meta name="twitter:image" content="${selectedImgUrl}" />`;
+              suggestedValueText = suggestedValueText + ogImageSnippet;
+            }
+          }
+        }
+
         const scores = getPriorityScoring(fix.type);
         const createdItem = await prisma.auditItem.create({
           data: {
@@ -431,7 +562,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             type: fix.type,
             targetUrl: fix.targetUrl,
             currentValue: currentValue,
-            suggestedValue: fix.suggestedValue,
+            suggestedValue: suggestedValueText,
             status: "pending",
             priority: scores.priority,
             impactScore: scores.impactScore,

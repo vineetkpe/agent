@@ -18,6 +18,7 @@ interface SuggestedOpportunity {
   keyword: string;
   intent: string;
   rationale: string;
+  clusterLabel: string;
 }
 
 interface StuffingIssue {
@@ -90,12 +91,13 @@ CRITICAL RULES:
 2. Ground all suggestions strictly in the business profile services, audience, and actual category. Do NOT invent generic keywords.
 3. Classify search intent for each keyword as either 'informational', 'commercial', or 'local'.
 4. Provide a realistic growth rationale for each suggestion (e.g. why it helps the business, what search intent it captures).
-5. Never claim or imply backlink generation or guaranteed backlinks results anywhere in rationale.
+5. For each keyword, provide a 'clusterLabel' which groups related keywords together by shared topic or intent (e.g., matching a service line, product category, or thematic search intent category).
+6. Never claim or imply backlink generation or guaranteed backlinks results anywhere in rationale.
 
 Return the suggestions formatted EXACTLY as a JSON object matching this schema:
 {
   "suggestions": [
-    { "keyword": "string", "intent": "informational" | "commercial" | "local", "rationale": "string" }
+    { "keyword": "string", "intent": "informational" | "commercial" | "local", "rationale": "string", "clusterLabel": "string" }
   ]
 }
 `;
@@ -110,9 +112,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
           properties: {
             keyword: { type: "STRING" },
             intent: { type: "STRING", enum: ["informational", "commercial", "local"] },
-            rationale: { type: "STRING" }
+            rationale: { type: "STRING" },
+            clusterLabel: { type: "STRING" }
           },
-          required: ["keyword", "intent", "rationale"]
+          required: ["keyword", "intent", "rationale", "clusterLabel"]
         }
       }
     },
@@ -129,8 +132,8 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
   } catch (err) {
     console.error("Failed to generate AI keyword suggestions:", err);
     return [
-      { keyword: "local services near me", intent: "local", rationale: "Captures commercial customer queries." },
-      { keyword: "how to choose service provider", intent: "informational", rationale: "Targets early funnel research." }
+      { keyword: "local services near me", intent: "local", rationale: "Captures commercial customer queries.", clusterLabel: "Local Search" },
+      { keyword: "how to choose service provider", intent: "informational", rationale: "Targets early funnel research.", clusterLabel: "Guides & Research" }
     ];
   }
 }
@@ -388,12 +391,42 @@ export async function GET(req: Request) {
       }
     }
 
+    const keywords = suggestedOpportunities.map(opp => {
+      const matchedGsc = site.gscConnected
+        ? rankingNow.find(g => g.query.toLowerCase().trim() === opp.keyword.toLowerCase().trim())
+        : null;
+      return {
+        ...opp,
+        source: matchedGsc ? "gsc_verified" : "ai_suggested",
+        position: matchedGsc?.position,
+        impressions: matchedGsc?.impressions,
+        clicks: matchedGsc?.clicks,
+        ctr: matchedGsc?.ctr,
+        clusterLabel: opp.clusterLabel || "General Opportunities"
+      };
+    });
+
+    const clusterMap: Record<string, typeof keywords> = {};
+    for (const kw of keywords) {
+      const label = kw.clusterLabel;
+      if (!clusterMap[label]) {
+        clusterMap[label] = [];
+      }
+      clusterMap[label].push(kw);
+    }
+    const clusters = Object.entries(clusterMap).map(([label, kws]) => ({
+      label,
+      keywords: kws
+    }));
+
     return NextResponse.json({
       rankingNow,
-      suggestedOpportunities,
+      suggestedOpportunities: keywords,
+      keywords: keywords,
       stuffingIssues,
       cannibalizationIssues,
-      gapIssues
+      gapIssues,
+      clusters
     });
   } catch (error) {
     console.error("[Keywords API Error]:", error);
