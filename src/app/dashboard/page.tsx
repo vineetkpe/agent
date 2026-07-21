@@ -436,6 +436,7 @@ export default function DashboardPage() {
               currentAudit={data.currentAudit}
               currentSite={data.currentSite}
               selectTab={data.selectTab}
+              rankingTrend={data.rankingTrend}
             />
           )}
 

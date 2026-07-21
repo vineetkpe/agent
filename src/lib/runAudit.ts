@@ -904,6 +904,26 @@ Provide suggestions as a JSON object matching this schema:
   // 9. Send notification email
   console.log(`[Email Notification] Sending ready alert: Hello! Your audit for ${cleanUrl} is ready. View fixes here: http://localhost:3000/dashboard`);
 
+  if (user?.email) {
+    const pendingItems = completedAudit.items.filter(item => item.status === "pending");
+    const highRiskItems = pendingItems.filter(item => item.riskLevel === "high");
+    const criticalItems = pendingItems.filter(item => item.priority === "critical");
+
+    if (highRiskItems.length > 0 || criticalItems.length > 0) {
+      try {
+        const { sendAuditDigestEmail } = await import("@/lib/email");
+        await sendAuditDigestEmail({
+          to: user.email,
+          siteUrl: cleanUrl,
+          highRiskItems,
+          criticalItems,
+        });
+      } catch (emailErr) {
+        console.error("[Email Notification] Failed to send audit digest email:", emailErr);
+      }
+    }
+  }
+
   return completedAudit;
 }
 

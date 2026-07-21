@@ -178,11 +178,45 @@ AI Recommendation Suggestion: ${item.suggestedValue || "None"}`;
                                 <div className="space-y-3 font-mono text-xs leading-relaxed text-zinc-650">
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="p-3 bg-white rounded-xl border border-zinc-200">
-                                      <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider mb-1">Current State</span>
-                                      <p className="break-all">{item.currentValue || "Missing or empty attribute"}</p>
+                                      <span className="text-[10px] text-red-650 font-bold block uppercase tracking-wider mb-1">Before (Current)</span>
+                                      <p className="break-all">
+                                        {(() => {
+                                          if (!item.currentValue) return "Empty or missing";
+                                          try {
+                                            const parsed = JSON.parse(item.currentValue);
+                                            if (item.type === "social_meta" && parsed.missingTags) {
+                                              return `Missing tags: ${parsed.missingTags.join(", ")}`;
+                                            }
+                                            if (item.type === "insecure_link" && parsed.insecureLinks) {
+                                              return `Insecure: ${parsed.insecureLinks.join(", ")}`;
+                                            }
+                                            if (item.type === "image_weight") {
+                                              return `Oversized img: ${parsed.imageUrl} (${parsed.sizeKb}KB)`;
+                                            }
+                                            if (item.type === "duplicate_content") {
+                                              return `Duplicate ${parsed.field}: "${parsed.value}" shared by: ${parsed.urls?.join(", ")}`;
+                                            }
+                                            if (item.type === "robots_sitemap") {
+                                              return `File: ${parsed.path || "sitemap.xml"} - ${parsed.error || "status: " + parsed.statusCode || "Missing"}`;
+                                            }
+                                            if (item.type === "redirect_chain") {
+                                              return `Chain: ${parsed.chain?.join(" -> ")} (${parsed.hops} hops)`;
+                                            }
+                                            if (item.type === "indexability_issue") {
+                                              return `Blocks: ${parsed.noindexMeta ? "meta noindex" : ""} ${parsed.noindexHeader ? "header x-robots-tag" : ""}`;
+                                            }
+                                            if (item.type === "heading_structure") {
+                                              return parsed.skippedDetails || `H1 Count: ${parsed.h1Count}`;
+                                            }
+                                            return parsed.title || parsed.description || parsed.count || parsed.canonical || item.currentValue;
+                                          } catch {
+                                            return item.currentValue;
+                                          }
+                                        })()}
+                                      </p>
                                     </div>
                                     <div className="p-3 bg-violet-50/10 rounded-xl border border-violet-200">
-                                      <span className="text-[10px] text-violet-600 font-bold block uppercase tracking-wider mb-1">Suggested Optimization</span>
+                                      <span className="text-[10px] text-violet-650 font-bold block uppercase tracking-wider mb-1">After (Suggested)</span>
                                       <p className="break-all">{item.suggestedValue}</p>
                                     </div>
                                   </div>

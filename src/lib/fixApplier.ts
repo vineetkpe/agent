@@ -23,6 +23,84 @@ export async function applyAuditItemFix(
       try {
         const appPassword = decrypt(site.wpAppPasswordEncrypted);
 
+        // WP-IMG-1: Sourcing featured image
+        let imageUrl: string | null = null;
+        let altText = postData.title || "";
+
+        // Attempt to extract existing Unsplash image URL from content
+        const unsplashMatch = postData.content?.match(/(https:\/\/images\.unsplash\.com\/[^\s"'>]+)/i);
+        if (unsplashMatch) {
+          imageUrl = unsplashMatch[1];
+        } else {
+          // Otherwise source one the same way generation does
+          try {
+            const { searchRelevantImages } = await import("@/lib/unsplash");
+            const queryTerm = postData.targetKeyword || postData.title || "business";
+            const images = await searchRelevantImages(queryTerm, 1);
+            if (images && images.length > 0) {
+              imageUrl = images[0].url;
+            }
+          } catch (unsplashErr) {
+            console.error("[WP-IMG-1] Sourcing backup image failed:", unsplashErr);
+          }
+        }
+
+        let featuredMediaId: number | undefined;
+        if (imageUrl) {
+          try {
+            const { uploadWpMedia } = await import("@/lib/wordpress");
+            const filename = `featured-image-${Date.now()}.jpg`;
+            const mediaId = await uploadWpMedia(
+              site.wpUrl,
+              site.wpUsername,
+              appPassword,
+              imageUrl,
+              filename,
+              altText
+            );
+            if (mediaId) {
+              featuredMediaId = mediaId;
+              console.log(`[WP-IMG-1] Successfully uploaded featured image, ID: ${featuredMediaId}`);
+            }
+          } catch (uploadErr) {
+            console.error("[WP-IMG-1] Featured image upload failed:", uploadErr);
+          }
+        }
+
+        // WP-TAX-1: Sourcing WordPress category derived from business profile category/industry
+        let categoryName = "SEO";
+        if (site.businessProfile) {
+          try {
+            const profile = JSON.parse(site.businessProfile);
+            if (profile.category) {
+              categoryName = profile.category;
+            } else if (profile.industry) {
+              categoryName = profile.industry;
+            }
+          } catch (e) {
+            console.error("Failed to parse businessProfile", e);
+          }
+        }
+
+        let categoryIds: number[] = [];
+        if (categoryName) {
+          try {
+            const { resolveOrCreateWpTerm } = await import("@/lib/wordpress");
+            const catId = await resolveOrCreateWpTerm(
+              site.wpUrl,
+              site.wpUsername,
+              appPassword,
+              "categories",
+              categoryName
+            );
+            if (catId) {
+              categoryIds.push(catId);
+            }
+          } catch (catErr) {
+            console.error("[WP-TAX-1] Category resolution failed:", catErr);
+          }
+        }
+
         // Publish post as draft to WordPress
         const wpResult = await publishWpPost(
           site.wpUrl,
@@ -30,7 +108,9 @@ export async function applyAuditItemFix(
           appPassword,
           postData.title,
           postData.content,
-          postData.slug
+          postData.slug,
+          featuredMediaId,
+          categoryIds
         );
 
         if (wpResult.success) {

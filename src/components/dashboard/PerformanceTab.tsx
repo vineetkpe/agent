@@ -9,6 +9,7 @@ interface PerformanceTabProps {
   currentAudit: any;
   currentSite: any;
   selectTab: (tab: any) => void;
+  rankingTrend?: any;
 }
 
 export const PerformanceTab: React.FC<PerformanceTabProps> = ({
@@ -16,6 +17,7 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
   currentAudit,
   currentSite,
   selectTab,
+  rankingTrend,
 }) => {
   // Sort pastAudits by date ascending for trend comparison
   const sortedAudits = [...pastAudits].sort(
@@ -278,6 +280,74 @@ export const PerformanceTab: React.FC<PerformanceTabProps> = ({
           <div className="grid grid-cols-1 gap-6">
             <ScoreTrendChart pastAudits={pastAudits} />
           </div>
+
+          {/* GSC Ranking Trend Section */}
+          {rankingTrend && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Visibility Score */}
+              <Card variant="flat" className="p-5 flex flex-col justify-between border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+                <div>
+                  <span className="text-xs font-bold font-mono text-zinc-400 uppercase tracking-wider block">GSC Query Visibility</span>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-1 leading-relaxed">
+                    % of tracked search queries ranking in positions 1-10 on Google.
+                  </p>
+                </div>
+                <div className="mt-4">
+                  {rankingTrend.status === "not_enough_history_yet" ? (
+                    <span className="text-sm font-semibold font-mono text-zinc-550">Not enough history yet</span>
+                  ) : (
+                    <span className="text-4xl font-extrabold text-violet-650 font-mono">{rankingTrend.visibilityScore}%</span>
+                  )}
+                </div>
+              </Card>
+
+              {/* Top Gainers */}
+              <Card variant="flat" className="p-5 border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] col-span-1 md:col-span-1">
+                <span className="text-xs font-bold font-mono text-emerald-600 uppercase tracking-wider block mb-3 flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4" /> Top Gainers
+                </span>
+                {rankingTrend.status === "not_enough_history_yet" ? (
+                  <span className="text-xs font-semibold font-mono text-zinc-400 italic">Not enough history yet</span>
+                ) : rankingTrend.topGainers.length === 0 ? (
+                  <span className="text-xs font-semibold font-mono text-zinc-400 italic">No gainers in this window</span>
+                ) : (
+                  <ul className="space-y-2 font-mono text-xs">
+                    {rankingTrend.topGainers.map((g: any, i: number) => (
+                      <li key={i} className="flex justify-between items-center border-b border-zinc-50 pb-1">
+                        <span className="truncate max-w-[120px] font-bold text-zinc-700" title={g.query}>"{g.query}"</span>
+                        <span className="text-emerald-600 font-bold">
+                          {g.previousPosition} → {g.currentPosition} (+{g.change.toFixed(1)})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+
+              {/* Top Losers */}
+              <Card variant="flat" className="p-5 border-2 border-zinc-950 bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] col-span-1 md:col-span-1">
+                <span className="text-xs font-bold font-mono text-red-655 uppercase tracking-wider block mb-3 flex items-center gap-1.5">
+                  <TrendingDown className="w-4 h-4" /> Top Losers
+                </span>
+                {rankingTrend.status === "not_enough_history_yet" ? (
+                  <span className="text-xs font-semibold font-mono text-zinc-400 italic">Not enough history yet</span>
+                ) : rankingTrend.topLosers.length === 0 ? (
+                  <span className="text-xs font-semibold font-mono text-zinc-400 italic">No losers in this window</span>
+                ) : (
+                  <ul className="space-y-2 font-mono text-xs">
+                    {rankingTrend.topLosers.map((l: any, i: number) => (
+                      <li key={i} className="flex justify-between items-center border-b border-zinc-50 pb-1">
+                        <span className="truncate max-w-[120px] font-bold text-zinc-700" title={l.query}>"{l.query}"</span>
+                        <span className="text-red-655 font-bold">
+                          {l.previousPosition} → {l.currentPosition} ({l.change.toFixed(1)})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+          )}
 
           {/* Top Visited & Most Visited Pages table */}
           <Card variant="flat" className="p-6 space-y-4">

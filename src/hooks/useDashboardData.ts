@@ -17,6 +17,7 @@ export function useDashboardData() {
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [allUserAuditItems, setAllUserAuditItems] = useState<any[]>([]);
   const [gaData, setGaData] = useState<any>(null);
+  const [rankingTrend, setRankingTrend] = useState<any>(null);
 
   // Independent scan progress states
   const [aiScanStatus, setAiScanStatus] = useState<"pending" | "running" | "done" | "failed">("pending");
@@ -91,6 +92,7 @@ export function useDashboardData() {
           setCurrentSite(null);
           setCurrentAudit(null);
           setPastAudits([]);
+          setRankingTrend(null);
         }
         if (data.audit) {
           setCurrentAudit(data.audit);
@@ -117,6 +119,11 @@ export function useDashboardData() {
           setGaData(data.gaData);
         } else {
           setGaData(null);
+        }
+        if (data.rankingTrend) {
+          setRankingTrend(data.rankingTrend);
+        } else {
+          setRankingTrend(null);
         }
         if (data.user) {
           setCurrentUser(data.user);
@@ -524,5 +531,7 @@ export function useDashboardData() {
     setAllUserAuditItems,
     gaData,
     setGaData,
+    rankingTrend,
+    setRankingTrend,
   };
 }

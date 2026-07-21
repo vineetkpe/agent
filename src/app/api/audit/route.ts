@@ -126,8 +126,12 @@ export async function GET(req: Request) {
         pageSpeedScanError: true,
         createdAt: true,
         status: true,
+        gscSnapshot: true,
       },
     });
+
+    const { computeRankingTrend } = await import("@/lib/rankingTrend");
+    const rankingTrend = computeRankingTrend(pastAudits);
 
     // Build Activity Log
     const siteAudits = await prisma.audit.findMany({
@@ -263,6 +267,7 @@ export async function GET(req: Request) {
       gaData,
       activityLog,
       uptimeChecks,
+      rankingTrend,
       user: {
         id: currentUser.id,
         email: currentUser.email,

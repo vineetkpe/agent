@@ -104,7 +104,10 @@ export async function publishWpPost(
   appPassword: string,
   title: string,
   content: string,
-  slug?: string
+  slug?: string,
+  featuredMediaId?: number,
+  categoryIds?: number[],
+  tagIds?: number[]
 ): Promise<{ success: boolean; url?: string; id?: number; error?: string }> {
   const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
   const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/posts`;
@@ -115,12 +118,22 @@ export async function publishWpPost(
 
   try {
     const sanitizedContent = sanitizeHtml(content);
-    const payload = {
+    const payload: any = {
       title,
       content: sanitizedContent,
       status: "draft", // V1 requires review, so we publish as draft
       slug: slug || undefined,
     };
+
+    if (typeof featuredMediaId === "number") {
+      payload.featured_media = featuredMediaId;
+    }
+    if (categoryIds && categoryIds.length > 0) {
+      payload.categories = categoryIds;
+    }
+    if (tagIds && tagIds.length > 0) {
+      payload.tags = tagIds;
+    }
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -440,4 +453,167 @@ export async function deleteWpPost(
     };
   }
 }
+
+/**
+ * Downloads a remote image and uploads it to the WordPress media library.
+ */
+export async function uploadWpMedia(
+  wpUrl: string,
+  username: string,
+  appPassword: string,
+  imageUrl: string,
+  filename: string,
+  altText?: string
+): Promise<number | null> {
+  try {
+    // 1. Fetch/download the image
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
+    if (!imgRes.ok) {
+      throw new Error(`Failed to fetch remote image: ${imgRes.statusText}`);
+    }
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 2. Resolve target URL
+    const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
+    const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/media`;
+
+    const cleanUsername = username.trim();
+    const cleanAppPassword = appPassword.trim();
+    const credentials = Buffer.from(`${cleanUsername}:${cleanAppPassword}`).toString("base64");
+
+    // Guess content type from filename or default to image/jpeg
+    let contentType = "image/jpeg";
+    if (filename.endsWith(".png")) contentType = "image/png";
+    else if (filename.endsWith(".gif")) contentType = "image/gif";
+    else if (filename.endsWith(".webp")) contentType = "image/webp";
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": contentType,
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+      },
+      body: buffer,
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (res.status === 201) {
+      const data = await res.json();
+      const mediaId = data.id;
+
+      // Update alt_text if provided
+      if (altText && mediaId) {
+        try {
+          await fetch(`${endpoint}/${mediaId}`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Basic ${credentials}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+            },
+            body: JSON.stringify({ alt_text: altText }),
+            signal: AbortSignal.timeout(5000),
+          });
+        } catch (altErr) {
+          console.warn(`[WordPress Client] Failed to update media alt text for ID ${mediaId}:`, altErr);
+        }
+      }
+
+      return mediaId;
+    } else {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[WordPress Client] Media upload returned status ${res.status}:`, errText);
+      return null;
+    }
+  } catch (err) {
+    console.error("[WordPress Client] uploadWpMedia failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Resolves an existing category/tag term by name, or creates it if missing.
+ */
+export async function resolveOrCreateWpTerm(
+  wpUrl: string,
+  username: string,
+  appPassword: string,
+  taxonomy: "categories" | "tags",
+  name: string
+): Promise<number | null> {
+  const cleanName = name.trim();
+  if (!cleanName) return null;
+
+  const resolvedBaseUrl = await resolveWpRedirectUrl(wpUrl);
+  const route = taxonomy === "categories" ? "categories" : "tags";
+  const endpoint = `${resolvedBaseUrl}/wp-json/wp/v2/${route}`;
+
+  const cleanUsername = username.trim();
+  const cleanAppPassword = appPassword.trim();
+  const credentials = Buffer.from(`${cleanUsername}:${cleanAppPassword}`).toString("base64");
+
+  try {
+    // 1. Search for existing term
+    const searchUrl = `${endpoint}?search=${encodeURIComponent(cleanName)}`;
+    const searchRes = await fetch(searchUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (searchRes.ok) {
+      const results = await searchRes.json();
+      if (Array.isArray(results)) {
+        // Find exact match case-insensitive
+        const matched = results.find(
+          (t: any) => t.name.toLowerCase().trim() === cleanName.toLowerCase()
+        );
+        if (matched && typeof matched.id === "number") {
+          console.log(`[WordPress Client] Found existing ${taxonomy} term "${cleanName}" with ID ${matched.id}`);
+          return matched.id;
+        }
+      }
+    }
+
+    // 2. Create the term if it doesn't exist
+    console.log(`[WordPress Client] Term "${cleanName}" not found. Creating new ${taxonomy}...`);
+    const createRes = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${credentials}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 AntigravityGrowthAgent/1.0",
+      },
+      body: JSON.stringify({ name: cleanName }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (createRes.status === 201) {
+      const data = await createRes.json();
+      console.log(`[WordPress Client] Created ${taxonomy} term "${cleanName}" with ID ${data.id}`);
+      return data.id;
+    } else {
+      const errData = await createRes.json().catch(() => ({}));
+      if (errData.code === "term_exists" && errData.data?.term_id) {
+        return errData.data.term_id;
+      }
+      console.warn(`[WordPress Client] Failed to create ${taxonomy} term "${cleanName}":`, errData.message || createRes.status);
+      return null;
+    }
+  } catch (err) {
+    console.error(`[WordPress Client] resolveOrCreateWpTerm failed for ${taxonomy} "${cleanName}":`, err);
+    return null;
+  }
+}
+
 
