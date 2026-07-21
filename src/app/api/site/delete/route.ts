@@ -27,10 +27,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Site not found or unauthorized" }, { status: 404 });
     }
 
-    // SQLite cascade deletes will automatically purge related Audits & AuditItems
-    await prisma.site.delete({
+    await prisma.site.update({
       where: {
         id: siteId,
+      },
+      data: {
+        deletedAt: new Date(),
       },
     });
 

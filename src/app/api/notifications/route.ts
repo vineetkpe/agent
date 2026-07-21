@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 
     // Fetch user's sites
     const sites = await prisma.site.findMany({
-      where: { userId: currentUser.id },
+      where: { userId: currentUser.id, deletedAt: null },
       select: { id: true, url: true, wpUrl: true, wpConnectedAt: true },
     });
 

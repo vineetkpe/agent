@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     let site;
     if (requestedSiteId) {
       site = await prisma.site.findFirst({
-        where: { id: requestedSiteId, userId: currentUser.id },
+        where: { id: requestedSiteId, userId: currentUser.id, deletedAt: null },
         select: {
           id: true,
           url: true,
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
       });
     } else {
       site = await prisma.site.findFirst({
-        where: { userId: currentUser.id },
+        where: { userId: currentUser.id, deletedAt: null },
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
     }
 
     const allSites = await prisma.site.findMany({
-      where: { userId: currentUser.id },
+      where: { userId: currentUser.id, deletedAt: null },
       select: {
         id: true,
         url: true,
@@ -318,6 +318,7 @@ export async function POST(req: Request) {
       where: {
         userId: currentUser.id,
         url: cleanUrl,
+        deletedAt: null,
       },
     });
 

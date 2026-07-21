@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     let site;
     if (siteId) {
       site = await prisma.site.findFirst({
-        where: { id: siteId, userId: currentUser.id },
+        where: { id: siteId, userId: currentUser.id, deletedAt: null },
         include: {
           audits: {
             orderBy: { createdAt: "desc" },
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       });
     } else {
       site = await prisma.site.findFirst({
-        where: { userId: currentUser.id },
+        where: { userId: currentUser.id, deletedAt: null },
         orderBy: { createdAt: "desc" },
         include: {
           audits: {
@@ -80,6 +80,42 @@ export async function POST(req: Request) {
             take: 1,
             include: { items: true },
           },
+        },
+      });
+    }
+
+    // Resolve or create ChatConversation
+    let conversation;
+    if (site) {
+      conversation = await prisma.chatConversation.findFirst({
+        where: { siteId: site.id, userId: currentUser.id },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!conversation) {
+        conversation = await prisma.chatConversation.create({
+          data: { siteId: site.id, userId: currentUser.id },
+        });
+      }
+    } else {
+      conversation = await prisma.chatConversation.findFirst({
+        where: { userId: currentUser.id, siteId: null },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!conversation) {
+        conversation = await prisma.chatConversation.create({
+          data: { userId: currentUser.id },
+        });
+      }
+    }
+
+    // Save user's latest message to the database
+    const latestUserMsgObj = messages[messages.length - 1];
+    if (latestUserMsgObj && latestUserMsgObj.role === "user") {
+      await prisma.chatMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: "user",
+          content: latestUserMsgObj.content,
         },
       });
     }
@@ -225,6 +261,18 @@ Please reply to the user's latest message as the AI Assistant following the Styl
 `;
 
     const reply = await generateContent(systemPrompt, currentUser.id);
+
+    // Save assistant's reply to the database
+    if (conversation) {
+      await prisma.chatMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: "assistant",
+          content: reply,
+        },
+      });
+    }
+
     return NextResponse.json({ reply });
 
   } catch (error) {
@@ -233,6 +281,51 @@ Please reply to the user's latest message as the AI Assistant following the Styl
       { error: (error as Error).message || "Failed to process chat request." },
       { status: 500 }
     );
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    const currentUser = await getCurrentUser(req);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const siteId = searchParams.get("siteId");
+
+    let conversation;
+    if (siteId) {
+      conversation = await prisma.chatConversation.findFirst({
+        where: { siteId, userId: currentUser.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+    } else {
+      conversation = await prisma.chatConversation.findFirst({
+        where: { userId: currentUser.id, siteId: null },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+    }
+
+    const messages = conversation?.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    })) || [];
+
+    return NextResponse.json({ messages });
+  } catch (error) {
+    console.error("[Chat GET API Error]:", error);
+    return NextResponse.json({ error: "Failed to retrieve chat history." }, { status: 500 });
   }
 }
 

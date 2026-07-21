@@ -13,6 +13,62 @@ import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { logActivity } from "@/lib/activityLog";
 import * as cheerio from "cheerio";
 
+export async function shouldCreateAuditItem(
+  siteId: string,
+  targetUrl: string,
+  type: string,
+  extraKey?: string
+): Promise<boolean> {
+  const whereClause: any = {
+    siteId,
+    type,
+  };
+
+  if (type === "keyword_opportunity") {
+    if (extraKey) {
+      whereClause.suggestedValue = {
+        contains: `\"keyword\":\"${extraKey}\"`,
+      };
+    }
+  } else if (type === "missing_internal_link" || type === "internal_linking") {
+    whereClause.targetUrl = targetUrl;
+    if (extraKey) {
+      whereClause.suggestedValue = {
+        contains: `\"toUrl\":\"${extraKey}\"`,
+      };
+    }
+  } else {
+    whereClause.targetUrl = targetUrl;
+  }
+
+  const existing = await prisma.auditItem.findFirst({
+    where: whereClause,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (!existing) {
+    return true;
+  }
+
+  if (existing.status === "pending") {
+    return false;
+  }
+
+  if (existing.status === "rejected") {
+    const cooldownDays = 14;
+    const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+    const timeSinceRejection = Date.now() - new Date(existing.createdAt).getTime();
+    if (timeSinceRejection < cooldownMs) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
 // Define the response schema structure expected from Gemini
 const geminiResponseSchema = {
   type: "OBJECT",
@@ -139,6 +195,41 @@ export async function runAuditForSite(
 
   if (crawledPages.length === 0) {
     throw new Error(`Could not fetch or crawl the site at ${cleanUrl}. Check if the URL is active.`);
+  }
+
+  // Upsert crawled pages into persistent Page inventory
+  try {
+    console.log(`[runAudit] Persisting ${crawledPages.length} crawled pages...`);
+    const countWords = (text?: string): number => {
+      if (!text) return 0;
+      return text.trim().split(/\s+/).filter(Boolean).length;
+    };
+
+    for (const page of crawledPages) {
+      const wordCount = countWords(page.visibleText);
+      await prisma.page.upsert({
+        where: {
+          siteId_url: {
+            siteId: site.id,
+            url: page.url,
+          },
+        },
+        update: {
+          title: page.title || null,
+          wordCount,
+          lastCrawledAt: new Date(),
+        },
+        create: {
+          siteId: site.id,
+          url: page.url,
+          title: page.title || null,
+          wordCount,
+          lastCrawledAt: new Date(),
+        },
+      });
+    }
+  } catch (pagePersistErr) {
+    console.error("[runAudit] Failed to persist crawled pages inventory:", pagePersistErr);
   }
 
   // 4. Run Business Intelligence analysis
@@ -272,6 +363,9 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
   // Save missing internal link suggestions as AuditItems
   try {
     for (const link of missingLinks) {
+      if (!(await shouldCreateAuditItem(site.id, link.sourceUrl, "missing_internal_link", link.targetUrl))) {
+        continue;
+      }
       const scores = getPriorityScoring("missing_internal_link");
       await prisma.auditItem.create({
         data: {
@@ -507,6 +601,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     // Save Page/Meta/Alt/Link Fixes
     if (aiResponse && aiResponse.fixes && aiResponse.fixes.length > 0) {
       for (const fix of aiResponse.fixes) {
+        if (!(await shouldCreateAuditItem(site.id, fix.targetUrl, fix.type))) {
+          continue;
+        }
         const relatedIssue = auditResults.issues.find(
           (issue) => issue.targetUrl === fix.targetUrl && issue.type === fix.type
         );
@@ -578,6 +675,10 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     if (aiResponse && aiResponse.blogPosts && aiResponse.blogPosts.length > 0) {
       for (let i = 0; i < aiResponse.blogPosts.length; i++) {
         const post = aiResponse.blogPosts[i];
+        const targetBlogUrl = `${cleanUrl}/blog/${post.suggestedSlug}`;
+        if (!(await shouldCreateAuditItem(site.id, targetBlogUrl, "blog_post"))) {
+          continue;
+        }
         const sanitizedContent = sanitizeHtml(post.content);
         const failures = validationFailuresMap[i] || [];
         let warning = failures.length > 0
@@ -671,6 +772,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     // Save Keyword Opportunities
     if (aiResponse && aiResponse.keywordOpportunities && aiResponse.keywordOpportunities.length > 0) {
       for (const opp of aiResponse.keywordOpportunities) {
+        if (!(await shouldCreateAuditItem(site.id, cleanUrl, "keyword_opportunity", opp.keyword))) {
+          continue;
+        }
         const matchedGsc = updatedSite.gscConnected
           ? gscSnapshotData.find(g => g.query.toLowerCase().trim() === opp.keyword.toLowerCase().trim())
           : null;
@@ -729,6 +833,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
       ["insecure_link", "image_weight", "robots_sitemap", "mobile_viewport_missing", "hreflang_missing", "orphan_page", "missing_security_headers", "js_rendering_risk", "generic_anchor_text"].includes(issue.type)
     );
     for (const issue of directIssues) {
+      if (!(await shouldCreateAuditItem(site.id, issue.targetUrl, issue.type))) {
+        continue;
+      }
       const currVal = issue.currentValue as { path?: string } | null | undefined;
       const suggVal = issue.suggestedValue as { action?: string } | null | undefined;
       if (issue.type === "robots_sitemap" && currVal?.path === "/sitemap.xml") {
@@ -765,7 +872,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         return issue.type === "robots_sitemap" && currVal?.path === "/sitemap.xml";
       }
     );
-    if (hasSitemapIssue) {
+    if (hasSitemapIssue && (await shouldCreateAuditItem(site.id, cleanUrl, "robots_sitemap"))) {
       const urlsXml = crawledPages.map(p => `  <url>\n    <loc>${p.url}</loc>\n  </url>`).join("\n");
       const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`;
       
@@ -853,6 +960,9 @@ Provide suggestions as a JSON object matching this schema:
 
       if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
         for (const sug of linkingResponse.suggestions) {
+          if (!(await shouldCreateAuditItem(site.id, sug.fromUrl, "internal_linking", sug.toUrl))) {
+            continue;
+          }
           const scores = getPriorityScoring("internal_linking");
           const createdItem = await prisma.auditItem.create({
             data: {

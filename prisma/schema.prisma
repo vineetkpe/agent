@@ -25,6 +25,7 @@ model User {
   createdAt               DateTime  @default(now())
   role                    String    @default("user") // "user" | "admin"
   sites                   Site[]
+  chatConversations       ChatConversation[]
   paymentFailedAt         DateTime?
   subscriptionStatus      String?
   name                    String?
@@ -66,8 +67,13 @@ model Site {
   audits                Audit[]
   auditItems            AuditItem[]
   uptimeChecks          UptimeCheck[]
+  pages                 Page[]
+  chatConversations     ChatConversation[]
   businessGoals         String?
   knowledgeGraphData    String?
+  deletedAt             DateTime?
+
+  @@index([userId])
 }
 
 model Audit {
@@ -91,6 +97,8 @@ model Audit {
   crawlerWarning      String?
   createdAt           DateTime    @default(now())
   items               AuditItem[]
+
+  @@index([siteId, createdAt])
 }
 
 model AuditItem {
@@ -117,6 +125,8 @@ model AuditItem {
   difficultyScore Int?     // 1-10
   updatedAt      DateTime  @default(now()) @updatedAt
   createdAt      DateTime  @default(now())
+
+  @@index([siteId, status, riskLevel])
 }
 
 model ApiUsageLog {
@@ -249,4 +259,43 @@ model ReportLog {
   @@index([userId])
   @@index([siteId])
 }
+
+model Page {
+  id            String   @id @default(uuid())
+  siteId        String
+  site          Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  url           String
+  title         String?
+  wordCount     Int      @default(0)
+  lastCrawledAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([siteId, url])
+  @@index([siteId])
+}
+
+model ChatConversation {
+  id        String        @id @default(uuid())
+  siteId    String?
+  site      Site?         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+
+  @@index([siteId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String           // 'user' | 'assistant'
+  content        String
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId])
+}
+
 

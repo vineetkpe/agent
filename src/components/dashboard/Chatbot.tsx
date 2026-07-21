@@ -35,12 +35,34 @@ export const Chatbot: React.FC<ChatbotProps> = ({ currentSite }) => {
   }, [messages, isOpen]);
 
   useEffect(() => {
-    setMessages([
-      {
-        role: "assistant",
-        content: `Hello! I am your AI Growth Agent for ${currentSite?.url || "your site"}. Ask me questions about your site's audit reports, or give me suggestions on what optimizations to prioritize next!`,
-      },
-    ]);
+    const loadChatHistory = async () => {
+      if (!currentSite?.id) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers["Authorization"] = `Bearer ${session.access_token}`;
+        }
+        const res = await fetch(`/api/chat?siteId=${currentSite.id}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          } else {
+            setMessages([
+              {
+                role: "assistant",
+                content: `Hello! I am your AI Growth Agent for ${currentSite?.url || "your site"}. Ask me questions about your site's audit reports, or give me suggestions on what optimizations to prioritize next!`,
+              },
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load chat history:", err);
+      }
+    };
+
+    loadChatHistory();
   }, [currentSite?.id]);
 
   useEffect(() => {

@@ -18,8 +18,11 @@ export async function GET(req: Request) {
             url: {
               contains: q,
             },
+            deletedAt: null,
           }
-        : {},
+        : {
+            deletedAt: null,
+          },
       include: {
         user: {
           select: {

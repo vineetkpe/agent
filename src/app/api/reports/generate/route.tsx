@@ -126,8 +126,8 @@ export async function POST(req: Request) {
     }
 
     // 1. Fetch site and latest audit
-    const site = await prisma.site.findUnique({
-      where: { id: siteId },
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, deletedAt: null },
     });
 
     if (!site || site.userId !== currentUser.id) {
@@ -198,7 +198,7 @@ export async function GET(req: Request) {
     }
 
     const sites = await prisma.site.findMany({
-      where: { userId: currentUser.id },
+      where: { userId: currentUser.id, deletedAt: null },
       select: { id: true, url: true },
     });
 

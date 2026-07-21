@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { CheckCircle, XCircle, Clock, Copy, Check, Zap, AlertTriangle, Clipboard, ExternalLink, ChevronDown, ChevronUp, HeartPulse } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -166,8 +167,41 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
     }
   };
 
+  // Chronological AuditItem history states
+  const [histories, setHistories] = useState<Record<string, any[]>>({});
+  const [loadingHistories, setLoadingHistories] = useState<Record<string, boolean>>({});
+
+  const fetchHistory = async (itemId: string, siteId: string, targetUrl: string, type: string) => {
+    if (histories[itemId] || loadingHistories[itemId]) return;
+    setLoadingHistories(prev => ({ ...prev, [itemId]: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+      
+      const res = await fetch(`/api/audit-item/history?siteId=${siteId}&targetUrl=${encodeURIComponent(targetUrl)}&type=${type}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHistories(prev => ({ ...prev, [itemId]: data.history || [] }));
+      }
+    } catch (err) {
+      console.error("Failed to load history for item", itemId, err);
+    } finally {
+      setLoadingHistories(prev => ({ ...prev, [itemId]: false }));
+    }
+  };
+
   const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+    const nextState = !expandedIds[id];
+    setExpandedIds((prev) => ({ ...prev, [id]: nextState }));
+    if (nextState) {
+      const selectedItem = currentAudit?.items?.find((m: any) => m.id === id);
+      if (selectedItem) {
+        fetchHistory(selectedItem.id, selectedItem.siteId, selectedItem.targetUrl, selectedItem.type);
+      }
+    }
   };
 
   const metaFixes =
@@ -510,6 +544,57 @@ export const RecommendationsTab: React.FC<RecommendationsTabProps> = ({
                           )}
                         </button>
                       </div>
+                    </div>
+
+                    {/* Version History Section */}
+                    <div className="space-y-2 pt-4 border-t border-zinc-200">
+                      <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider font-mono">
+                        Recommendation History Log
+                      </span>
+                      {loadingHistories[item.id] ? (
+                        <div className="text-xs text-zinc-500 font-mono">Loading history...</div>
+                      ) : !histories[item.id] || histories[item.id].length <= 1 ? (
+                        <div className="text-xs text-zinc-400 font-mono italic">No prior history logs.</div>
+                      ) : (
+                        <div className="overflow-x-auto border border-zinc-200 rounded-lg">
+                          <table className="w-full text-left text-[11px] border-collapse font-mono text-zinc-650">
+                            <thead>
+                              <tr className="bg-zinc-50 border-b border-zinc-200 text-[9px] uppercase tracking-wider text-zinc-400 font-bold">
+                                <th className="py-1.5 px-3">Date</th>
+                                <th className="py-1.5 px-3">Audit Details</th>
+                                <th className="py-1.5 px-3 text-right">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-150">
+                              {histories[item.id].map((h: any) => {
+                                const isCurrent = h.id === item.id;
+                                return (
+                                  <tr key={h.id} className={`hover:bg-zinc-50/50 ${isCurrent ? "bg-violet-50/20 font-bold text-violet-750" : ""}`}>
+                                    <td className="py-2 px-3 whitespace-nowrap">
+                                      {new Date(h.createdAt).toLocaleDateString()} {isCurrent && "(Current)"}
+                                    </td>
+                                    <td className="py-2 px-3 truncate max-w-xs" title={h.suggestedValue}>
+                                      {["schema_markup", "robots_sitemap"].includes(item.type)
+                                        ? h.suggestedValue.substring(0, 60) + "..."
+                                        : item.type === "internal_linking" ? (() => {
+                                            try {
+                                              const parsed = JSON.parse(h.suggestedValue);
+                                              return `Link to ${parsed.toUrl}`;
+                                            } catch {
+                                              return h.suggestedValue;
+                                            }
+                                          })() : h.suggestedValue}
+                                    </td>
+                                    <td className="py-2 px-3 text-right uppercase tracking-wider text-[9px] font-bold">
+                                      {h.status}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
 
                     {/* WordPress update/push failure callout */}

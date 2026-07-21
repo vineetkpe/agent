@@ -19,8 +19,8 @@ export async function POST(
       return NextResponse.json({ error: "Invalid action." }, { status: 400 });
     }
 
-    const site = await prisma.site.findUnique({
-      where: { id: siteId },
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, deletedAt: null },
     });
 
     if (!site) {
@@ -61,16 +61,17 @@ export async function DELETE(
 
     const { siteId } = await params;
 
-    const site = await prisma.site.findUnique({
-      where: { id: siteId },
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, deletedAt: null },
     });
 
     if (!site) {
       return NextResponse.json({ error: "Site not found" }, { status: 404 });
     }
 
-    await prisma.site.delete({
+    await prisma.site.update({
       where: { id: siteId },
+      data: { deletedAt: new Date() },
     });
 
     console.log(`[AUDIT TRAIL] Admin ${currentUser.email} deleted Site ${site.url} (ID: ${siteId}).`);

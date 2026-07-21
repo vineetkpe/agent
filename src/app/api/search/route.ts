@@ -25,6 +25,7 @@ export async function GET(req: Request) {
         url: {
           contains: lowercaseQuery,
         },
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
       where: {
         site: {
           userId: currentUser.id,
+          deletedAt: null,
         },
         OR: [
           {
