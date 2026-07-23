@@ -120,29 +120,69 @@ export async function GET(req: Request) {
       },
       select: {
         provider: true,
+        callType: true,
         success: true,
+        wasFailover: true,
+        userId: true,
       },
     });
 
-    const apiUsageMap: { [provider: string]: { success: number; failure: number } } = {};
+    const apiProviderMap: { [provider: string]: { success: number; failure: number; failovers: number } } = {};
+    const apiFeatureMap: { [callType: string]: { success: number; failure: number; failovers: number } } = {};
+    const apiUserMap: { [userId: string]: number } = {};
+
     apiLogs.forEach((log) => {
       const providerKey = log.provider || "unknown";
-      if (!apiUsageMap[providerKey]) {
-        apiUsageMap[providerKey] = { success: 0, failure: 0 };
+      if (!apiProviderMap[providerKey]) {
+        apiProviderMap[providerKey] = { success: 0, failure: 0, failovers: 0 };
       }
       if (log.success) {
-        apiUsageMap[providerKey].success++;
+        apiProviderMap[providerKey].success++;
       } else {
-        apiUsageMap[providerKey].failure++;
+        apiProviderMap[providerKey].failure++;
+      }
+      if (log.wasFailover) {
+        apiProviderMap[providerKey].failovers++;
+      }
+
+      const featureKey = log.callType || "general";
+      if (!apiFeatureMap[featureKey]) {
+        apiFeatureMap[featureKey] = { success: 0, failure: 0, failovers: 0 };
+      }
+      if (log.success) {
+        apiFeatureMap[featureKey].success++;
+      } else {
+        apiFeatureMap[featureKey].failure++;
+      }
+      if (log.wasFailover) {
+        apiFeatureMap[featureKey].failovers++;
+      }
+
+      if (log.userId) {
+        apiUserMap[log.userId] = (apiUserMap[log.userId] || 0) + 1;
       }
     });
 
-    const apiUsageLast30Days = Object.entries(apiUsageMap).map(([provider, counts]) => ({
+    const apiUsageLast30Days = Object.entries(apiProviderMap).map(([provider, counts]) => ({
       provider,
       success: counts.success,
       failure: counts.failure,
+      failovers: counts.failovers,
       total: counts.success + counts.failure,
     }));
+
+    const apiUsageByFeature = Object.entries(apiFeatureMap).map(([callType, counts]) => ({
+      callType,
+      success: counts.success,
+      failure: counts.failure,
+      failovers: counts.failovers,
+      total: counts.success + counts.failure,
+    }));
+
+    const topApiUsers = Object.entries(apiUserMap)
+      .map(([userId, totalCalls]) => ({ userId, totalCalls }))
+      .sort((a, b) => b.totalCalls - a.totalCalls)
+      .slice(0, 10);
 
     // 6. Recent activities (20 most recent AuditItem rows)
     const recentAuditItems = await prisma.auditItem.findMany({
@@ -254,6 +294,8 @@ export async function GET(req: Request) {
       auditItemsBreakdown,
       signupsLast30Days,
       apiUsageLast30Days,
+      apiUsageByFeature,
+      topApiUsers,
       recentActivity,
       usersList,
       failoverCallsLast24h,

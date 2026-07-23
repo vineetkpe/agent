@@ -236,7 +236,7 @@ export default function AdminPage() {
             {/* Signup charts and Usage metrics */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <SignupsChart signups={stats.signupsLast30Days} />
-              <UsageBreakdown usage={stats.apiUsageLast30Days} />
+              <UsageBreakdown usage={stats.apiUsageLast30Days} byFeature={stats.apiUsageByFeature} byUser={stats.topApiUsers} />
             </div>
 
             {/* Users registry list and recent logs */}
