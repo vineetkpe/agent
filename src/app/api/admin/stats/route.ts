@@ -31,6 +31,8 @@ export async function GET(req: Request) {
       else if (p === "agency") estimatedMrr += 99;
     });
 
+    const estimatedArr = estimatedMrr * 12;
+
     // Add a separate stat: 'Comped users' count (planSource='admin_grant')
     const compedUsersCount = await prisma.user.count({
       where: {
@@ -41,6 +43,36 @@ export async function GET(req: Request) {
     const activeSubscriptions = await prisma.user.count({
       where: { subscriptionActive: true },
     });
+
+    const arpu = activeSubscriptions > 0 ? Math.round((estimatedMrr / activeSubscriptions) * 100) / 100 : 0;
+
+    const allUsersForPlan = await prisma.user.findMany({
+      select: {
+        plan: true,
+      },
+    });
+
+    const planDistribution: Record<string, number> = {
+      free: 0,
+      starter: 0,
+      growth: 0,
+      agency: 0,
+    };
+
+    allUsersForPlan.forEach((u) => {
+      const slug = (u.plan || "free").toLowerCase();
+      planDistribution[slug] = (planDistribution[slug] || 0) + 1;
+    });
+
+    const canceledInLast30Days = await prisma.user.count({
+      where: {
+        subscriptionStatus: "canceled",
+      },
+    });
+
+    const baseSubscribers = activeSubscriptions + canceledInLast30Days;
+    const churnRate = baseSubscribers > 0 ? Math.round((canceledInLast30Days / baseSubscribers) * 10000) / 100 : 0;
+
     const totalSites = await prisma.site.count();
     const totalAudits = await prisma.audit.count();
 
@@ -287,6 +319,10 @@ export async function GET(req: Request) {
       totalUsers,
       activeSubscriptions,
       estimatedMrr,
+      estimatedArr,
+      arpu,
+      planDistribution,
+      churnRate,
       compedUsersCount,
       totalSites,
       totalAudits,

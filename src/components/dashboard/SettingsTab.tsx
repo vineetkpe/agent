@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { 
@@ -14,7 +14,8 @@ import {
   ExternalLink,
   Info,
   Layers,
-  Sparkles
+  Sparkles,
+  FileText
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
@@ -51,6 +52,28 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
   // Billing portal loading state
   const [loadingPortal, setLoadingPortal] = useState(false);
+
+  // Invoice History State
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+
+  useEffect(() => {
+    async function fetchInvoices() {
+      try {
+        setLoadingInvoices(true);
+        const res = await fetch("/api/user/invoices");
+        if (res.ok) {
+          const data = await res.json();
+          setInvoices(data.invoices || []);
+        }
+      } catch (err) {
+        console.error("[SettingsTab] Failed to fetch invoices:", err);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    }
+    fetchInvoices();
+  }, []);
 
   // Notification states
   const [notifyWeekly, setNotifyWeekly] = useState(true);
@@ -310,6 +333,77 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 </div>
               </div>
             </div>
+          </Card>
+
+          {/* Invoice & Receipt History Section */}
+          <Card variant="flat" className="p-6 border-2 border-zinc-950 bg-white">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-150 mb-5">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-violet-650" />
+                <h3 className="font-bold text-zinc-900 text-sm font-mono uppercase tracking-wider">
+                  Invoice & Payment History
+                </h3>
+              </div>
+              <span className="text-[10px] text-zinc-400 font-mono">Stripe Hosted Receipts</span>
+            </div>
+
+            {loadingInvoices ? (
+              <div className="py-6 text-center text-xs font-mono text-zinc-400">
+                Loading invoice records...
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="py-6 text-center text-xs font-mono text-zinc-500 border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50">
+                No past billing invoices or payment receipts found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-zinc-950 bg-zinc-100 text-zinc-700">
+                      <th className="py-2 px-3">Date</th>
+                      <th className="py-2 px-3">Invoice Ref</th>
+                      <th className="py-2 px-3">Amount</th>
+                      <th className="py-2 px-3">Status</th>
+                      <th className="py-2 px-3 text-right">PDF Invoice</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="border-b border-zinc-200">
+                        <td className="py-2.5 px-3 font-medium text-zinc-800">
+                          {new Date(inv.created * 1000).toLocaleDateString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-600">
+                          {inv.number || inv.id}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-zinc-900">
+                          ${(inv.amountPaid / 100).toFixed(2)} {(inv.currency || "USD").toUpperCase()}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                            {inv.status || "Paid"}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {inv.pdfUrl || inv.hostedUrl ? (
+                            <a
+                              href={inv.pdfUrl || inv.hostedUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-bold text-violet-650 hover:underline"
+                            >
+                              View Invoice <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-400">N/A</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
 
           {/* Notifications Panel */}

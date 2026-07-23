@@ -18,6 +18,7 @@ import { SitesTab } from "@/components/dashboard/SitesTab";
 import { AIContextTab } from "@/components/dashboard/AIContextTab";
 import { PerformanceTab } from "@/components/dashboard/PerformanceTab";
 import { SettingsTab } from "@/components/dashboard/SettingsTab";
+import { UsageTab } from "@/components/dashboard/UsageTab";
 import { ReportsTab } from "@/components/dashboard/ReportsTab";
 import { NotificationsTab } from "@/components/dashboard/NotificationsTab";
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
@@ -456,6 +457,10 @@ export default function DashboardPage() {
               handleSubscribe={data.handleSubscribe}
               isSubscribing={data.isSubscribing}
             />
+          )}
+
+          {data.activeTab === "usage" && (
+            <UsageTab currentUser={data.currentUser} onUpgrade={data.handleSubscribe} />
           )}
 
           {data.activeTab === "notifications" && (

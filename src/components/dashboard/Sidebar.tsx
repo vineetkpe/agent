@@ -69,6 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: "Setup",
       items: [
         { id: "sites", label: "Sites & Connections", icon: <Globe className="w-4 h-4" /> },
+        { id: "usage", label: "Usage & Plan", icon: <Activity className="w-4 h-4" /> },
         { id: "settings", label: "Support/Settings", icon: <Settings className="w-4 h-4" /> },
         { id: "feedback", label: "Feedback/Bug Report", icon: <MessageSquare className="w-4 h-4" /> },
         { id: "help", label: "Help Center", icon: <HelpCircle className="w-4 h-4" />, href: "/help" },

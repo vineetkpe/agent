@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance" | "settings" | "notifications" | "keywords" | "flow" | "competitors" | "uptime" | "feedback" | "tasks" | "reports";
+export type TabType = "overview" | "crawler" | "recommendations" | "content" | "connections" | "sites" | "context" | "performance" | "settings" | "notifications" | "keywords" | "flow" | "competitors" | "uptime" | "feedback" | "tasks" | "reports" | "usage";
 
 export function useDashboardData() {
   const [siteUrl, setSiteUrl] = useState("");

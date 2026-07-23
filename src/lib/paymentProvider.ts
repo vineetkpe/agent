@@ -19,14 +19,40 @@ export interface CancelSubscriptionParams {
   userId: string;
 }
 
+export interface InvoiceItem {
+  id: string;
+  number: string | null;
+  amountPaid: number;
+  currency: string;
+  status: string | null;
+  created: number;
+  pdfUrl: string | null;
+  hostedUrl: string | null;
+}
+
 export interface PaymentProvider {
   createCheckoutSession(params: CheckoutSessionParams): Promise<{ url: string }>;
   createBillingPortalSession(params: BillingPortalSessionParams): Promise<{ url: string }>;
   cancelSubscription(params: CancelSubscriptionParams): Promise<{ success: boolean }>;
   verifyWebhookSignature(rawBody: string, signature: string): Promise<unknown>;
+  listInvoices(customerId: string): Promise<InvoiceItem[]>;
 }
 
 const mockProvider: PaymentProvider = {
+  async listInvoices(customerId: string): Promise<InvoiceItem[]> {
+    return [
+      {
+        id: "inv_mock_101",
+        number: "INV-2026-001",
+        amountPaid: 4900,
+        currency: "usd",
+        status: "paid",
+        created: Math.floor(Date.now() / 1000) - 86400 * 15,
+        pdfUrl: "https://stripe.com",
+        hostedUrl: "https://stripe.com",
+      },
+    ];
+  },
   async createCheckoutSession({ userId, planSlug, billingInterval }) {
     const planRecord = await prisma.plan.findUnique({
       where: { slug: planSlug }
@@ -244,7 +270,32 @@ const stripeProvider: PaymentProvider = {
       throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
     }
     return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  }
+  },
+
+  async listInvoices(customerId: string): Promise<InvoiceItem[]> {
+    if (!stripe) {
+      return [];
+    }
+    try {
+      const invoices = await stripe.invoices.list({
+        customer: customerId,
+        limit: 24,
+      });
+      return invoices.data.map((inv) => ({
+        id: inv.id,
+        number: inv.number,
+        amountPaid: inv.amount_paid,
+        currency: inv.currency,
+        status: inv.status,
+        created: inv.created,
+        pdfUrl: inv.invoice_pdf || null,
+        hostedUrl: inv.hosted_invoice_url || null,
+      }));
+    } catch (err) {
+      console.error("[Stripe listInvoices Error]:", err);
+      return [];
+    }
+  },
 };
 
 const providerType = process.env.PAYMENT_PROVIDER || "mock";
