@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { publishWpPost, resolveWpPostIdFromUrl, updateWpTitle, updateWpMetaDescription, getWpPost } from "@/lib/wordpress";
 import { AuditItem, Site, User } from "@prisma/client";
+import { logActivity } from "@/lib/activityLog";
 
 export async function applyAuditItemFix(
   item: AuditItem,
@@ -114,6 +115,43 @@ export async function applyAuditItemFix(
         );
 
         if (wpResult.success) {
+          // SEC-ROLLBACK-1: Verification check for published blog post
+          let verifyPassed = false;
+          if (wpResult.id) {
+            try {
+              const verifyWp = await getWpPost(site.wpUrl, site.wpUsername, appPassword, wpResult.id, "post");
+              if (verifyWp.success && verifyWp.title) {
+                verifyPassed = true;
+              }
+            } catch (vErr) {
+              console.error("[SEC-ROLLBACK-1 Verification Error]:", vErr);
+              verifyPassed = false;
+            }
+          }
+
+          if (!verifyPassed) {
+            console.warn(`[SEC-ROLLBACK-1 Auto-Rollback] Blog post verification failed for item ${itemId}. Reverting status.`);
+            await logActivity(user.id, "auto_rollback", {
+              itemId,
+              type: "blog_post",
+              targetUrl: item.targetUrl,
+              reason: "Post-apply verification failed: Published WordPress post could not be retrieved",
+            });
+            const revertedItem = await prisma.auditItem.update({
+              where: { id: itemId },
+              data: {
+                status: "pending",
+                rolledBackAt: new Date(),
+                errorMessage: "Auto-rollback: Published WordPress post failed post-apply verification check.",
+              },
+            });
+            return {
+              error: "WordPress publish verification failed. Change was automatically reverted.",
+              item: revertedItem,
+              status: 502,
+            };
+          }
+
           const updatedItem = await prisma.auditItem.update({
             where: { id: itemId },
             data: {
@@ -244,6 +282,52 @@ export async function applyAuditItemFix(
           );
 
           if (updateResult.success) {
+            // SEC-ROLLBACK-1: Post-publish verification for meta_title
+            let verifyPassed = true;
+            try {
+              const verifyWp = await getWpPost(site.wpUrl, site.wpUsername, appPassword, postId, postType);
+              if (!verifyWp.success || !verifyWp.title || verifyWp.title.trim() !== (item.suggestedValue || "").trim()) {
+                verifyPassed = false;
+              }
+            } catch (vErr) {
+              console.error("[SEC-ROLLBACK-1 Title Verification Error]:", vErr);
+              verifyPassed = false;
+            }
+
+            if (!verifyPassed) {
+              console.warn(`[SEC-ROLLBACK-1 Auto-Rollback] Meta title verification failed for item ${itemId}. Live WP title did not match. Reverting change.`);
+              if (currentVal) {
+                try {
+                  const oldData = JSON.parse(currentVal);
+                  if (oldData.title) {
+                    await updateWpTitle(site.wpUrl, site.wpUsername, appPassword, postId, postType, oldData.title);
+                  }
+                } catch {
+                  // ignore restore error
+                }
+              }
+              await logActivity(user.id, "auto_rollback", {
+                itemId,
+                type: "meta_title",
+                targetUrl: item.targetUrl,
+                reason: "Post-apply verification failed: Live title did not match requested change",
+              });
+              const revertedItem = await prisma.auditItem.update({
+                where: { id: itemId },
+                data: {
+                  status: "approved",
+                  rolledBackAt: new Date(),
+                  errorMessage: "Auto-rollback: Live title on WordPress did not match requested change after update.",
+                },
+              });
+              return {
+                success: true,
+                status: "approved",
+                item: revertedItem,
+                message: "Auto-rolled back: Live title did not reflect changes (plugin/cache conflict).",
+              };
+            }
+
             const updatedItem = await prisma.auditItem.update({
               where: { id: itemId },
               data: {
@@ -300,6 +384,52 @@ export async function applyAuditItemFix(
             );
 
             if (updateResult.success) {
+              // SEC-ROLLBACK-1: Post-publish verification for meta_description
+              let verifyPassed = true;
+              try {
+                const verifyWp = await getWpPost(site.wpUrl, site.wpUsername, appPassword, postId, postType);
+                if (!verifyWp.success || !verifyWp.metaDescription || verifyWp.metaDescription.trim() !== (item.suggestedValue || "").trim()) {
+                  verifyPassed = false;
+                }
+              } catch (vErr) {
+                console.error("[SEC-ROLLBACK-1 Meta Verification Error]:", vErr);
+                verifyPassed = false;
+              }
+
+              if (!verifyPassed) {
+                console.warn(`[SEC-ROLLBACK-1 Auto-Rollback] Meta description verification failed for item ${itemId}. Reverting change.`);
+                if (currentVal) {
+                  try {
+                    const oldData = JSON.parse(currentVal);
+                    if (oldData.description && plugin) {
+                      await updateWpMetaDescription(site.wpUrl, site.wpUsername, appPassword, postId, postType, plugin, oldData.description);
+                    }
+                  } catch {
+                    // ignore restore error
+                  }
+                }
+                await logActivity(user.id, "auto_rollback", {
+                  itemId,
+                  type: "meta_description",
+                  targetUrl: item.targetUrl,
+                  reason: "Post-apply verification failed: Live meta description did not match requested change",
+                });
+                const revertedItem = await prisma.auditItem.update({
+                  where: { id: itemId },
+                  data: {
+                    status: "approved",
+                    rolledBackAt: new Date(),
+                    errorMessage: "Auto-rollback: Live meta description on WordPress did not match requested change.",
+                  },
+                });
+                return {
+                  success: true,
+                  status: "approved",
+                  item: revertedItem,
+                  message: "Auto-rolled back: Live meta description did not reflect changes.",
+                };
+              }
+
               const updatedItem = await prisma.auditItem.update({
                 where: { id: itemId },
                 data: {

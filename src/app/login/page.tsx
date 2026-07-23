@@ -39,6 +39,11 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       setErrorMsg(err.message || "An unexpected error occurred.");
+      fetch("/api/auth/login-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, failed: true, reason: err.message }),
+      }).catch(() => {});
     } finally {
       setLoading(false);
     }

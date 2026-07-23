@@ -121,6 +121,38 @@ export async function POST(req: Request) {
           console.log(`[Webhook] Deactivated subscription for user ${user.id} due to event ${event.type}`);
         }
       }
+    } else if (event.type === "customer.subscription.updated") {
+      const subscription = event.data.object as Stripe.Subscription;
+      const customerId = typeof subscription.customer === "string" ? subscription.customer : (subscription.customer ? subscription.customer.id : null);
+      if (customerId) {
+        const user = await prisma.user.findFirst({
+          where: { stripeCustomerId: customerId },
+        });
+        if (user) {
+          await logActivity(user.id, "subscription_updated", {
+            customerId,
+            status: subscription.status,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          });
+          console.log(`[Webhook] Logged subscription_updated event for user ${user.id} (Customer: ${customerId})`);
+        }
+      }
+    } else if (event.type === "invoice.payment_succeeded") {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = typeof invoice.customer === "string" ? invoice.customer : (invoice.customer ? invoice.customer.id : null);
+      if (customerId && invoice.billing_reason === "subscription_cycle") {
+        const user = await prisma.user.findFirst({
+          where: { stripeCustomerId: customerId },
+        });
+        if (user) {
+          await logActivity(user.id, "subscription_renewal", {
+            customerId,
+            invoiceId: invoice.id,
+            amountPaid: invoice.amount_paid,
+          });
+          console.log(`[Webhook] Logged subscription_renewal event for user ${user.id} (Customer: ${customerId})`);
+        }
+      }
     }
   } catch (dbErr) {
     console.error("[Webhook Database Error]:", dbErr);

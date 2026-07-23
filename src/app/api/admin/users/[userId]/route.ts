@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { User } from "@prisma/client";
 import { getCurrentUser } from "@/lib/user";
+import { logActivity } from "@/lib/activityLog";
 
 export async function GET(
   req: Request,
@@ -156,6 +157,13 @@ export async function DELETE(
     if (targetUser.id === currentUser.id) {
       return NextResponse.json({ error: "Cannot delete your own administrative account." }, { status: 400 });
     }
+
+    await logActivity(
+      currentUser.id,
+      "account_deleted",
+      { deletedUserId: targetUser.id, deletedUserEmail: targetUser.email, deletedByAdminEmail: currentUser.email },
+      req
+    );
 
     await prisma.user.delete({
       where: { id: userId },
