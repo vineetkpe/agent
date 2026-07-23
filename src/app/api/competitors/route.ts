@@ -6,6 +6,7 @@ import { crawlSite, CrawledPage } from "@/lib/crawler";
 import { getPageSpeedData } from "@/lib/seoChecks";
 import { isSafeUrlToFetch } from "@/lib/urlSafety";
 import { Site } from "@prisma/client";
+import { buildWebsiteMemoryContext } from "@/lib/memoryContext";
 
 interface Competitor {
   url: string;
@@ -46,16 +47,8 @@ const suggestedCompetitorSchema = {
 };
 
 async function suggestCompetitors(site: Site): Promise<Competitor[]> {
-  const manuallyEntered = site.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
-  const profile = site.businessProfile
-    ? JSON.parse(site.businessProfile)
-    : (manuallyEntered ? {
-        summary: manuallyEntered.description,
-        industry: manuallyEntered.industry,
-        category: manuallyEntered.industry,
-        services: manuallyEntered.services || [],
-        targetAudience: manuallyEntered.targetAudience,
-      } : null);
+  const memoryContext = await buildWebsiteMemoryContext(site.id);
+  const profile = memoryContext.businessProfile;
 
   if (!profile) {
     return [

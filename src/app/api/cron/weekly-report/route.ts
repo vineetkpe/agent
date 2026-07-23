@@ -239,9 +239,19 @@ export async function GET(req: Request) {
       results.push({ email: user.email, success: true, hasRealActivity });
     }
 
+    // Evaluate fix outcomes asynchronously for applied fixes across all sites
+    let outcomeEvalResults = { evaluated: 0, updated: 0 };
+    try {
+      const { evaluateAuditItemOutcomes } = await import("@/lib/rankingTrend");
+      outcomeEvalResults = await evaluateAuditItemOutcomes();
+    } catch (evalErr) {
+      console.error("[Weekly Report Cron] Outcome evaluation error:", evalErr);
+    }
+
     return NextResponse.json({
       success: true,
       processedCount: results.length,
+      outcomeEvalResults,
       results,
     });
   } catch (error) {

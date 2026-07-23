@@ -119,3 +119,123 @@ export function computeRankingTrend(audits: any[]) {
     visibilityScore,
   };
 }
+
+import { prisma } from "@/lib/prisma";
+
+function normalizeUrl(url?: string): string {
+  if (!url) return "";
+  let clean = url.trim().toLowerCase();
+  clean = clean.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  if (clean.endsWith("/")) {
+    clean = clean.slice(0, -1);
+  }
+  return clean;
+}
+
+function getAveragePositionForUrl(gscSnapshotRaw: string | null, targetUrl: string): number | null {
+  if (!gscSnapshotRaw) return null;
+  try {
+    const rows = JSON.parse(gscSnapshotRaw);
+    if (!Array.isArray(rows)) return null;
+
+    const normTarget = normalizeUrl(targetUrl);
+    const matchingRows = rows.filter((r: any) => {
+      if (!r || typeof r.position !== "number") return false;
+      if (r.page) {
+        return normalizeUrl(r.page) === normTarget;
+      }
+      return false;
+    });
+
+    if (matchingRows.length === 0) return null;
+    const totalPos = matchingRows.reduce((sum: number, r: any) => sum + r.position, 0);
+    return totalPos / matchingRows.length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Evaluates outcome tags for applied AuditItems by comparing page GSC search positions
+ * before vs after the fix was applied (requiring a post-fix audit at least 14 days after appliedAt).
+ */
+export async function evaluateAuditItemOutcomes(siteId?: string): Promise<{ evaluated: number; updated: number }> {
+  const FourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+
+  const whereClause: any = {
+    appliedAt: { not: null },
+    outcomeTag: null,
+  };
+  if (siteId) {
+    whereClause.siteId = siteId;
+  }
+
+  const itemsToEvaluate = await prisma.auditItem.findMany({
+    where: whereClause,
+    take: 100,
+  });
+
+  let updatedCount = 0;
+
+  for (const item of itemsToEvaluate) {
+    if (!item.appliedAt) continue;
+
+    const appliedTime = new Date(item.appliedAt).getTime();
+    const minPostDate = new Date(appliedTime + FourteenDaysMs);
+
+    // Find audit immediately BEFORE appliedAt
+    const preAudit = await prisma.audit.findFirst({
+      where: {
+        siteId: item.siteId,
+        createdAt: { lte: item.appliedAt },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Find audit at least 14 days AFTER appliedAt
+    const postAudit = await prisma.audit.findFirst({
+      where: {
+        siteId: item.siteId,
+        createdAt: { gte: minPostDate },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!preAudit || !postAudit || !preAudit.gscSnapshot || !postAudit.gscSnapshot) {
+      if (postAudit && (preAudit?.gscSnapshot === null || postAudit?.gscSnapshot === null)) {
+        await prisma.auditItem.update({
+          where: { id: item.id },
+          data: { outcomeTag: "insufficient_data" },
+        });
+        updatedCount++;
+      }
+      continue;
+    }
+
+    const prePos = getAveragePositionForUrl(preAudit.gscSnapshot, item.targetUrl);
+    const postPos = getAveragePositionForUrl(postAudit.gscSnapshot, item.targetUrl);
+
+    let tag: "improved" | "no_change" | "worsened" | "insufficient_data";
+
+    if (prePos === null || postPos === null) {
+      tag = "insufficient_data";
+    } else {
+      const diff = prePos - postPos; // Lower position number = better ranking (e.g. 10 -> 4 => +6)
+      if (diff >= 1.0) {
+        tag = "improved";
+      } else if (diff <= -1.0) {
+        tag = "worsened";
+      } else {
+        tag = "no_change";
+      }
+    }
+
+    await prisma.auditItem.update({
+      where: { id: item.id },
+      data: { outcomeTag: tag },
+    });
+    updatedCount++;
+  }
+
+  return { evaluated: itemsToEvaluate.length, updated: updatedCount };
+}

@@ -5,6 +5,7 @@ import { fetchSearchConsoleData } from "@/lib/googleSearchConsole";
 import { generateStructuredJson } from "@/lib/aiProvider";
 import { crawlSite, CrawledPage } from "@/lib/crawler";
 import { Site } from "@prisma/client";
+import { buildWebsiteMemoryContext } from "@/lib/memoryContext";
 
 interface RankingQuery {
   query: string;
@@ -41,16 +42,8 @@ interface GapIssue {
 }
 
 async function getSuggestedOpportunities(site: Site, rankingNow: RankingQuery[]): Promise<SuggestedOpportunity[]> {
-  const manuallyEntered = site.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
-  const profile = site.businessProfile
-    ? JSON.parse(site.businessProfile)
-    : (manuallyEntered ? {
-        industry: manuallyEntered.industry,
-        category: manuallyEntered.industry,
-        summary: manuallyEntered.description,
-        services: manuallyEntered.services || [],
-        targetAudience: manuallyEntered.targetAudience,
-      } : null);
+  const memoryContext = await buildWebsiteMemoryContext(site.id);
+  const profile = memoryContext.businessProfile;
 
   const servicesList = profile?.services
     ? (Array.isArray(profile.services) ? profile.services.map((s: string | { name: string }) => typeof s === "string" ? s : s.name).join(", ") : String(profile.services))
@@ -69,7 +62,7 @@ Discovered Business Profile:
     ? `Here are top search queries currently ranking for this website: ${rankingNow.map((k: RankingQuery) => `"${k.query}"`).slice(0, 15).join(", ")}`
     : "No Search Console ranking queries available.";
 
-  const businessGoalsList = site.businessGoals ? JSON.parse(site.businessGoals) : [];
+  const businessGoalsList = profile?.businessGoals || (site.businessGoals ? JSON.parse(site.businessGoals) : []);
   const goalsBiasText = businessGoalsList.length > 0
     ? `\nBIAS SIGNAL: The business owner is focused on these goals: ${businessGoalsList.join(", ")}.
 If the goals include 'more_calls' or 'more_bookings', prioritize local-intent keywords that prompt the visitor to contact, call, or book an appointment.

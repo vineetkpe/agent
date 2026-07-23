@@ -5,6 +5,7 @@ import { generateContent } from "@/lib/aiProvider";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { logActivity } from "@/lib/activityLog";
+import { buildWebsiteMemoryContext } from "@/lib/memoryContext";
 
 function cleanUserInput(text: string): string {
   if (typeof text !== "string") return "";
@@ -62,25 +63,11 @@ export async function POST(req: Request) {
     if (siteId) {
       site = await prisma.site.findFirst({
         where: { id: siteId, userId: currentUser.id, deletedAt: null },
-        include: {
-          audits: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { items: true },
-          },
-        },
       });
     } else {
       site = await prisma.site.findFirst({
         where: { userId: currentUser.id, deletedAt: null },
         orderBy: { createdAt: "desc" },
-        include: {
-          audits: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { items: true },
-          },
-        },
       });
     }
 
@@ -120,14 +107,18 @@ export async function POST(req: Request) {
       });
     }
 
-    const latestAudit = site?.audits?.[0];
+    // Bounded site memory context (Layer 2 memory)
+    const memoryContext = site ? await buildWebsiteMemoryContext(site.id, { maxAudits: 5 }) : null;
+    const businessProfile = memoryContext?.businessProfile || null;
+    const pastAudits = memoryContext?.audits || [];
+    const latestAudit = pastAudits[0] || null;
     const auditSummary = latestAudit ? {
       scorePerformance: latestAudit.scorePerformance,
       scoreSeo: latestAudit.scoreSeo,
-      lcpSeconds: latestAudit.lcpSeconds,
-      clsScore: latestAudit.clsScore,
-      inpMilliseconds: latestAudit.inpMilliseconds,
-      issues: latestAudit.items.map(item => ({
+      lcpSeconds: latestAudit.cwv.lcpSeconds,
+      clsScore: latestAudit.cwv.clsScore,
+      inpMilliseconds: latestAudit.cwv.inpMilliseconds,
+      issues: latestAudit.pendingItems.map(item => ({
         type: item.type,
         targetUrl: item.targetUrl,
         status: item.status,
@@ -135,34 +126,6 @@ export async function POST(req: Request) {
         suggestedValue: item.suggestedValue ? item.suggestedValue.substring(0, 150) : "",
       })),
     } : null;
-
-    // Fetch history of all audits for the chatbot context
-    const pastAudits = site ? await prisma.audit.findMany({
-      where: { siteId: site.id },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        scorePerformance: true,
-        scoreSeo: true,
-        createdAt: true,
-      },
-    }) : [];
-
-    const manuallyEntered = site?.manuallyEnteredContext ? JSON.parse(site.manuallyEnteredContext) : null;
-    const businessProfile = site?.businessProfile
-      ? JSON.parse(site.businessProfile)
-      : (manuallyEntered ? {
-          summary: manuallyEntered.description,
-          industry: manuallyEntered.industry,
-          category: manuallyEntered.industry,
-          products: [],
-          services: manuallyEntered.services || [],
-          targetAudience: manuallyEntered.targetAudience,
-          brandVoice: "Professional",
-          usps: [`Located in ${manuallyEntered.cityServiceArea}`],
-          competitors: [],
-          confidenceScore: 1.0,
-        } : null);
 
     // Heuristic injection pre-filter check
     let flaggedAsSuspicious = false;

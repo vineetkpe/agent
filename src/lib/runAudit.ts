@@ -11,6 +11,7 @@ import { applyAuditItemFix } from "@/lib/fixApplier";
 import { Site, User, AuditItem } from "@prisma/client";
 import { getEffectivePlanLimits } from "@/lib/planLimits";
 import { logActivity } from "@/lib/activityLog";
+import { buildWebsiteMemoryContext } from "@/lib/memoryContext";
 import * as cheerio from "cheerio";
 
 export async function shouldCreateAuditItem(
@@ -94,8 +95,9 @@ const geminiResponseSchema = {
           type: { type: "STRING", enum: ["meta_title", "meta_description", "schema_markup", "missing_alt", "broken_link", "heading_structure", "canonical_tag", "social_meta", "duplicate_content", "faq_section"] },
           suggestedValue: { type: "STRING" },
           suggestedBodyReplacement: { type: "STRING" },
+          reasoningSummary: { type: "STRING" },
         },
-        required: ["targetUrl", "type", "suggestedValue"],
+        required: ["targetUrl", "type", "suggestedValue", "reasoningSummary"],
       },
     },
     blogPosts: {
@@ -159,6 +161,7 @@ interface AiResponse {
     type: string;
     suggestedValue: string;
     suggestedBodyReplacement?: string;
+    reasoningSummary?: string;
   }[];
   blogPosts: {
     title: string;
@@ -400,21 +403,8 @@ Note: Google Search Console is NOT connected. You must generate keyword opportun
 
   try {
     console.log(`[runAudit] Running AI content/fixes scan for: ${cleanUrl}`);
-    const manuallyEntered = updatedSite.manuallyEnteredContext ? JSON.parse(updatedSite.manuallyEnteredContext) : null;
-    const parsedProfile = updatedSite.businessProfile
-      ? JSON.parse(updatedSite.businessProfile)
-      : (manuallyEntered ? {
-          summary: manuallyEntered.description,
-          industry: manuallyEntered.industry,
-          category: manuallyEntered.industry,
-          products: [],
-          services: manuallyEntered.services || [],
-          targetAudience: manuallyEntered.targetAudience,
-          brandVoice: "Professional",
-          usps: [`Located in ${manuallyEntered.cityServiceArea}`],
-          competitors: [],
-          confidenceScore: 1.0,
-        } : null);
+    const memoryContext = await buildWebsiteMemoryContext(updatedSite.id, { maxAudits: 5 });
+    const parsedProfile = memoryContext.businessProfile;
     const productsList = parsedProfile?.products
       ? (Array.isArray(parsedProfile.products)
           ? parsedProfile.products.map((p: string | { name: string }) => typeof p === "string" ? p : p.name).join(", ")
@@ -529,7 +519,7 @@ Based on this audit data, please generate:
    - For 'social_meta' issues: Provide the missing OpenGraph / Twitter meta HTML snippets (og:title, og:description, etc.).
    - For 'duplicate_content' issues: Provide a suggested unique title or meta description alternative in 'suggestedValue' to resolve duplication, AND provide a rewritten, unique version of the duplicated body content section in 'suggestedBodyReplacement' that is grounded in the page's real topic.
    - For 'faq_section' issues: Generate 4-6 real question/answer pairs grounded in the actual business profile (its products, services, location, and USPs). Format the Q&A as human-readable HTML (using <h3> for questions and <p> for answers). Alongside this human-readable HTML, generate and append a valid schema.org FAQPage JSON-LD block wrapped in a <script type="application/ld+json">...</script> tag. All content must be specifically about the business and its offerings, never generic placeholder text.
-   Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly.
+    Ensure the 'targetUrl' and 'type' keys in the 'fixes' array match exactly with the 'targetUrl' and 'type' keys from the issues list so they can be matched correctly. For every fix in 'fixes', include a short (one sentence) rationale in 'reasoningSummary' explaining specifically why this fix is recommended for this page.
 3. Two (2) high-quality draft blog posts targeting content gaps or educational queries for the users of this business to drive organic search growth. Write content in WordPress-compatible HTML format (wrap blocks in standard tags or Guttenberg comments like <!-- wp:paragraph -->). Each blog post must be built around one of the identified quick-win keywords.
 
 Return the suggestions formatted EXACTLY as a JSON object matching this schema:
@@ -538,7 +528,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     { "keyword": "string", "rationale": "string", "intent": "informational" | "transactional" }
   ],
   "fixes": [
-    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content" | "faq_section", "suggestedValue": "string", "suggestedBodyReplacement": "string" }
+    { "targetUrl": "string", "type": "meta_title" | "meta_description" | "schema_markup" | "missing_alt" | "broken_link" | "heading_structure" | "canonical_tag" | "social_meta" | "duplicate_content" | "faq_section", "suggestedValue": "string", "suggestedBodyReplacement": "string", "reasoningSummary": "string" }
   ],
   "blogPosts": [
     { "title": "string", "content": "string", "suggestedSlug": "string", "targetKeyword": "string" }
@@ -660,6 +650,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
             targetUrl: fix.targetUrl,
             currentValue: currentValue,
             suggestedValue: suggestedValueText,
+            reasoningSummary: fix.reasoningSummary || null,
             status: "pending",
             priority: scores.priority,
             impactScore: scores.impactScore,

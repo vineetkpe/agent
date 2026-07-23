@@ -123,6 +123,8 @@ model AuditItem {
   priority       String?   // "critical" | "high" | "medium" | "low"
   impactScore    Int?      // 1-10
   difficultyScore Int?     // 1-10
+  reasoningSummary String?
+  outcomeTag     String?   // "improved" | "no_change" | "worsened" | "insufficient_data"
   updatedAt      DateTime  @default(now()) @updatedAt
   createdAt      DateTime  @default(now())
 
