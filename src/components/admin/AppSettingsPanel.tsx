@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
-import { Cpu, RefreshCw, Save, Sparkles, CheckCircle, AlertTriangle } from "lucide-react";
+import { Cpu, RefreshCw, Save, CheckCircle, AlertTriangle, Power, DollarSign } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export const AppSettingsPanel: React.FC = () => {
@@ -10,12 +10,21 @@ export const AppSettingsPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // States
+  // System States
   const [aiProvider, setAiProvider] = useState("");
   const [aiProviderPriority, setAiProviderPriority] = useState("");
   const [auditCooldownMinutes, setAuditCooldownMinutes] = useState<number | string>("");
+  const [autoPublishEnabled, setAutoPublishEnabled] = useState<boolean>(true);
 
-  // Environment fallback variables (from server)
+  // Provider Cost Rates (per 1M tokens)
+  const [geminiInputRate, setGeminiInputRate] = useState<number | string>(0.15);
+  const [geminiOutputRate, setGeminiOutputRate] = useState<number | string>(0.60);
+  const [groqInputRate, setGroqInputRate] = useState<number | string>(0.59);
+  const [groqOutputRate, setGroqOutputRate] = useState<number | string>(0.79);
+  const [openrouterInputRate, setOpenrouterInputRate] = useState<number | string>(0.80);
+  const [openrouterOutputRate, setOpenrouterOutputRate] = useState<number | string>(0.80);
+
+  // Environment fallback variables
   const [envAiProvider, setEnvAiProvider] = useState("gemini");
   const [envAiProviderPriority, setEnvAiProviderPriority] = useState("gemini,groq,openrouter");
   const [envAuditCooldownMinutes, setEnvAuditCooldownMinutes] = useState<number | string>(5);
@@ -60,6 +69,7 @@ export const AppSettingsPanel: React.FC = () => {
       setPrioritySource(settings.aiProviderPrioritySource);
       setEffectiveCooldown(settings.auditCooldownMinutes);
       setCooldownSource(settings.auditCooldownMinutesSource);
+      setAutoPublishEnabled(settings.autoPublishEnabled !== undefined ? settings.autoPublishEnabled : true);
       setEnvAiProvider(settings.envAiProvider || "gemini");
       setEnvAiProviderPriority(settings.envAiProviderPriority || "gemini,groq,openrouter");
       setEnvAuditCooldownMinutes(settings.envAuditCooldownMinutes !== null && settings.envAuditCooldownMinutes !== undefined ? settings.envAuditCooldownMinutes : 5);
@@ -69,6 +79,12 @@ export const AppSettingsPanel: React.FC = () => {
       setAiProvider(raw?.aiProvider || "");
       setAiProviderPriority(raw?.aiProviderPriority || "");
       setAuditCooldownMinutes(raw?.auditCooldownMinutes !== null && raw?.auditCooldownMinutes !== undefined ? raw.auditCooldownMinutes : "");
+      setGeminiInputRate(raw?.geminiInputRate ?? 0.15);
+      setGeminiOutputRate(raw?.geminiOutputRate ?? 0.60);
+      setGroqInputRate(raw?.groqInputRate ?? 0.59);
+      setGroqOutputRate(raw?.groqOutputRate ?? 0.79);
+      setOpenrouterInputRate(raw?.openrouterInputRate ?? 0.80);
+      setOpenrouterOutputRate(raw?.openrouterOutputRate ?? 0.80);
     } catch (err: any) {
       setError(err.message || "Failed to load settings.");
     } finally {
@@ -99,6 +115,13 @@ export const AppSettingsPanel: React.FC = () => {
           aiProvider: aiProvider || null,
           aiProviderPriority: aiProviderPriority || null,
           auditCooldownMinutes: auditCooldownMinutes !== "" ? parseInt(auditCooldownMinutes as string, 10) : null,
+          autoPublishEnabled,
+          geminiInputRate: geminiInputRate !== "" ? parseFloat(geminiInputRate as string) : 0.15,
+          geminiOutputRate: geminiOutputRate !== "" ? parseFloat(geminiOutputRate as string) : 0.60,
+          groqInputRate: groqInputRate !== "" ? parseFloat(groqInputRate as string) : 0.59,
+          groqOutputRate: groqOutputRate !== "" ? parseFloat(groqOutputRate as string) : 0.79,
+          openrouterInputRate: openrouterInputRate !== "" ? parseFloat(openrouterInputRate as string) : 0.80,
+          openrouterOutputRate: openrouterOutputRate !== "" ? parseFloat(openrouterOutputRate as string) : 0.80,
         }),
       });
 
@@ -107,7 +130,7 @@ export const AppSettingsPanel: React.FC = () => {
         throw new Error(errData.error || "Failed to save application settings.");
       }
 
-      setSuccessMsg("Settings updated successfully! Bypasses and active provider updates take effect immediately.");
+      setSuccessMsg("Settings and Killswitch updated successfully! Changes take effect immediately.");
       await fetchSettings();
     } catch (err: any) {
       setError(err.message || "Failed to save settings.");
@@ -140,11 +163,11 @@ export const AppSettingsPanel: React.FC = () => {
           <div className="flex items-center gap-2">
             <Cpu className="w-5 h-5 text-violet-650" />
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800">
-              System Configuration Panel
+              System Configuration & Feature Switches
             </h3>
           </div>
           <span className="text-[9px] uppercase font-bold font-mono text-zinc-400">
-            Settings override console
+            Platform control console
           </span>
         </div>
 
@@ -169,6 +192,34 @@ export const AppSettingsPanel: React.FC = () => {
         )}
 
         <form onSubmit={handleSave} className="space-y-6">
+          {/* KILLSWITCH-1: Auto-Publish Control */}
+          <div className="p-4 rounded-xl border-2 border-zinc-955 bg-amber-50/50 space-y-3 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Power className={`w-4 h-4 ${autoPublishEnabled ? "text-emerald-600" : "text-red-600"}`} />
+                <div>
+                  <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800">
+                    Auto-Publish Platform Killswitch
+                  </h4>
+                  <p className="text-[11px] font-mono text-zinc-500">
+                    Instantly pause or resume platform-wide low-risk auto-publishing without a deploy
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAutoPublishEnabled(!autoPublishEnabled)}
+                className={`px-4 py-2 text-xs font-mono font-bold uppercase rounded-xl border-2 border-zinc-955 transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] ${
+                  autoPublishEnabled
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                {autoPublishEnabled ? "ACTIVE (Auto-Apply On)" : "PAUSED (Auto-Apply Disabled)"}
+              </button>
+            </div>
+          </div>
+
           {/* AI Provider Settings */}
           <div className="space-y-2">
             <label className="text-[10px] font-mono font-bold tracking-wider text-zinc-550 uppercase block">
@@ -239,6 +290,90 @@ export const AppSettingsPanel: React.FC = () => {
             </div>
           </div>
 
+          {/* Admin Configurable Provider Cost Rates */}
+          <div className="p-4 rounded-xl border-2 border-zinc-955 bg-white space-y-4 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)]">
+            <div className="flex items-center gap-2 border-b border-zinc-150 pb-2">
+              <DollarSign className="w-4 h-4 text-emerald-600" />
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800">
+                AI Provider Token Cost Rates ($ per 1 Million Tokens)
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+              <div className="space-y-2 p-3 bg-zinc-50 rounded-lg border border-zinc-200">
+                <span className="font-bold text-zinc-800 block">Gemini</span>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Input Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={geminiInputRate}
+                    onChange={(e) => setGeminiInputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Output Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={geminiOutputRate}
+                    onChange={(e) => setGeminiOutputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 p-3 bg-zinc-50 rounded-lg border border-zinc-200">
+                <span className="font-bold text-zinc-800 block">Groq</span>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Input Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={groqInputRate}
+                    onChange={(e) => setGroqInputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Output Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={groqOutputRate}
+                    onChange={(e) => setGroqOutputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 p-3 bg-zinc-50 rounded-lg border border-zinc-200">
+                <span className="font-bold text-zinc-800 block">OpenRouter</span>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Input Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={openrouterInputRate}
+                    onChange={(e) => setOpenrouterInputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-zinc-500 uppercase block">Output Rate ($/1M)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={openrouterOutputRate}
+                    onChange={(e) => setOpenrouterOutputRate(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-zinc-300 font-mono text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="pt-4 border-t border-zinc-150 flex justify-end">
             <button
               type="submit"
@@ -246,7 +381,7 @@ export const AppSettingsPanel: React.FC = () => {
               className="px-5 py-2.5 border-2 border-zinc-955 bg-violet-650 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-violet-750 flex items-center gap-2 disabled:opacity-50"
             >
               {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Save Configuration Settings
+              Save System Settings & Killswitch
             </button>
           </div>
         </form>

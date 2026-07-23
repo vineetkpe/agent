@@ -7,7 +7,14 @@ const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 const ai = apiKey && apiKey !== "mock-gemini-key" ? new GoogleGenAI({ apiKey }) : null;
 
-export async function generateContent(prompt: string): Promise<string> {
+export interface ProviderResponse<T> {
+  result: T;
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export async function generateContent(prompt: string): Promise<ProviderResponse<string>> {
   if (!ai) {
     throw new Error("Gemini API client not initialized.");
   }
@@ -16,10 +23,20 @@ export async function generateContent(prompt: string): Promise<string> {
     model: MODEL_NAME,
     contents: prompt,
   });
-  return response.text || "";
+
+  const usage = response.usageMetadata;
+  return {
+    result: response.text || "",
+    model: MODEL_NAME,
+    inputTokens: usage?.promptTokenCount ?? undefined,
+    outputTokens: usage?.candidatesTokenCount ?? undefined,
+  };
 }
 
-export async function generateStructuredJson<T>(prompt: string, responseSchema?: Record<string, unknown>): Promise<T> {
+export async function generateStructuredJson<T>(
+  prompt: string,
+  responseSchema?: Record<string, unknown>
+): Promise<ProviderResponse<T>> {
   if (!ai) {
     throw new Error("Gemini API client not initialized.");
   }
@@ -34,5 +51,11 @@ export async function generateStructuredJson<T>(prompt: string, responseSchema?:
   });
 
   const text = response.text || "{}";
-  return JSON.parse(text) as T;
+  const usage = response.usageMetadata;
+  return {
+    result: JSON.parse(text) as T,
+    model: MODEL_NAME,
+    inputTokens: usage?.promptTokenCount ?? undefined,
+    outputTokens: usage?.candidatesTokenCount ?? undefined,
+  };
 }

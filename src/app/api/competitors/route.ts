@@ -80,7 +80,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     const response = await generateStructuredJson<{ competitors: Competitor[] }>(
       prompt,
       suggestedCompetitorSchema,
-      site.userId
+      site.userId,
+      site.id,
+      "competitors"
     );
     return response.competitors || [];
   } catch (err) {

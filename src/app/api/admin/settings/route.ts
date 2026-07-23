@@ -10,7 +10,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden: Admin access required." }, { status: 403 });
     }
 
-    const settings = await prisma.appSettings.findFirst({
+    const settings: any = await prisma.appSettings.findFirst({
       where: { id: "singleton" },
     });
 
@@ -31,6 +31,8 @@ export async function GET(req: Request) {
       ? "database"
       : "env-default";
 
+    const autoPublishEnabled = settings?.autoPublishEnabled !== undefined ? settings.autoPublishEnabled : true;
+
     return NextResponse.json({
       settings: {
         aiProvider,
@@ -39,6 +41,13 @@ export async function GET(req: Request) {
         aiProviderPrioritySource,
         auditCooldownMinutes,
         auditCooldownMinutesSource,
+        autoPublishEnabled,
+        geminiInputRate: settings?.geminiInputRate ?? 0.15,
+        geminiOutputRate: settings?.geminiOutputRate ?? 0.60,
+        groqInputRate: settings?.groqInputRate ?? 0.59,
+        groqOutputRate: settings?.groqOutputRate ?? 0.79,
+        openrouterInputRate: settings?.openrouterInputRate ?? 0.80,
+        openrouterOutputRate: settings?.openrouterOutputRate ?? 0.80,
         envAiProvider: envProvider,
         envAiProviderPriority: envPriority,
         envAuditCooldownMinutes: parseInt(envCooldown, 10),
@@ -59,9 +68,20 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const aiProvider = body.aiProvider;
-    const aiProviderPriority = body.aiProviderPriority;
-    const auditCooldownMinutes = body.auditCooldownMinutes;
+    const {
+      aiProvider,
+      aiProviderPriority,
+      auditCooldownMinutes,
+      autoPublishEnabled,
+      geminiInputRate,
+      geminiOutputRate,
+      groqInputRate,
+      groqOutputRate,
+      openrouterInputRate,
+      openrouterOutputRate,
+    } = body;
+
+    const parseRate = (val: any) => (val !== undefined && val !== null && val !== "" ? parseFloat(val) : null);
 
     // Upsert singleton row
     const settings = await prisma.appSettings.upsert({
@@ -73,14 +93,28 @@ export async function PATCH(req: Request) {
         auditCooldownMinutes: auditCooldownMinutes !== undefined && auditCooldownMinutes !== "" && auditCooldownMinutes !== null
           ? parseInt(auditCooldownMinutes, 10)
           : null,
-      },
+        autoPublishEnabled: autoPublishEnabled !== undefined ? Boolean(autoPublishEnabled) : true,
+        geminiInputRate: parseRate(geminiInputRate),
+        geminiOutputRate: parseRate(geminiOutputRate),
+        groqInputRate: parseRate(groqInputRate),
+        groqOutputRate: parseRate(groqOutputRate),
+        openrouterInputRate: parseRate(openrouterInputRate),
+        openrouterOutputRate: parseRate(openrouterOutputRate),
+      } as any,
       update: {
         aiProvider: aiProvider || null,
         aiProviderPriority: aiProviderPriority || null,
         auditCooldownMinutes: auditCooldownMinutes !== undefined && auditCooldownMinutes !== "" && auditCooldownMinutes !== null
           ? parseInt(auditCooldownMinutes, 10)
           : null,
-      },
+        autoPublishEnabled: autoPublishEnabled !== undefined ? Boolean(autoPublishEnabled) : true,
+        geminiInputRate: parseRate(geminiInputRate),
+        geminiOutputRate: parseRate(geminiOutputRate),
+        groqInputRate: parseRate(groqInputRate),
+        groqOutputRate: parseRate(groqOutputRate),
+        openrouterInputRate: parseRate(openrouterInputRate),
+        openrouterOutputRate: parseRate(openrouterOutputRate),
+      } as any,
     });
 
     // Clear server cache so setting takes effect instantly
@@ -92,4 +126,3 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: (error as Error).message || "Failed to save settings." }, { status: 500 });
   }
 }
-

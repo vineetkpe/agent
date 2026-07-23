@@ -15,6 +15,8 @@ import { UserManagementPanel } from "@/components/admin/UserManagementPanel";
 import { SiteManagementPanel } from "@/components/admin/SiteManagementPanel";
 import { PlanManagementPanel } from "@/components/admin/PlanManagementPanel";
 import { ActivityFeedbackPanel } from "@/components/admin/ActivityFeedbackPanel";
+import { AiCostDashboard } from "@/components/admin/AiCostDashboard";
+import { AuditLogViewerPanel } from "@/components/admin/AuditLogViewerPanel";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -22,7 +24,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "sites" | "settings" | "plans" | "activity">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "users" | "sites" | "settings" | "plans" | "activity" | "aicost" | "auditlogs"
+  >("overview");
 
   const fetchStats = async () => {
     try {
@@ -130,12 +134,12 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-800 selection:bg-violet-500 selection:text-white p-6 md:p-8 space-y-8">
       {/* Header section */}
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-zinc-950 pb-6">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-zinc-955 pb-6">
         <div>
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
-              className="w-8 h-8 rounded-lg border-2 border-zinc-950 flex items-center justify-center bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-50 transition-colors"
+              className="w-8 h-8 rounded-lg border-2 border-zinc-955 flex items-center justify-center bg-white shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:bg-zinc-50 transition-colors"
             >
               <ArrowLeft className="w-4 h-4 text-zinc-700" />
             </Link>
@@ -143,7 +147,7 @@ export default function AdminPage() {
               System Settings Console
             </span>
           </div>
-          <h1 className="text-3xl font-black font-mono mt-2 tracking-tight text-zinc-950">
+          <h1 className="text-3xl font-black font-mono mt-2 tracking-tight text-zinc-955">
             Administrative Telemetry Dashboard
           </h1>
         </div>
@@ -151,27 +155,43 @@ export default function AdminPage() {
         <button
           onClick={fetchStats}
           type="button"
-          className="px-4 py-2.5 border-2 rounded-xl text-xs font-bold uppercase tracking-wider font-mono bg-white border-zinc-950 text-zinc-705 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)]"
+          className="px-4 py-2.5 border-2 rounded-xl text-xs font-bold uppercase tracking-wider font-mono bg-white border-zinc-955 text-zinc-705 flex items-center gap-2 shadow-[2px_2px_0px_0px_rgba(9,9,11,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_rgba(9,9,11,1)]"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Refresh Telemetry
         </button>
       </div>
 
       {/* Navigation tabs */}
-      <div className="max-w-7xl mx-auto flex border-b border-zinc-200 font-mono text-xs font-bold uppercase">
+      <div className="max-w-7xl mx-auto flex border-b border-zinc-200 font-mono text-xs font-bold uppercase flex-wrap gap-y-2">
         {stats?.currentUser?.role === "admin" && (
           <>
             <button
               onClick={() => setActiveTab("overview")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] transition-colors ${
                 activeTab === "overview" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
               Overview
             </button>
             <button
+              onClick={() => setActiveTab("aicost")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "aicost" ? "bg-white text-emerald-700 font-bold" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              AI Cost Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab("auditlogs")}
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+                activeTab === "auditlogs" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Audit & Activity Logs
+            </button>
+            <button
               onClick={() => setActiveTab("users")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "users" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
@@ -179,7 +199,7 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab("sites")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "sites" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
@@ -187,7 +207,7 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab("plans")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "plans" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
@@ -195,15 +215,15 @@ export default function AdminPage() {
             </button>
             <button
               onClick={() => setActiveTab("activity")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "activity" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
-              Logs & Feedback
+              Feedback & Submissions
             </button>
             <button
               onClick={() => setActiveTab("settings")}
-              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-950 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
+              className={`px-4 py-2.5 border-t-2 border-x-2 border-zinc-955 rounded-t-xl -mb-[2px] ml-2 transition-colors ${
                 activeTab === "settings" ? "bg-white text-violet-650" : "bg-zinc-100/50 text-zinc-500 hover:text-zinc-800"
               }`}
             >
@@ -244,6 +264,18 @@ export default function AdminPage() {
               <UsersTable users={stats.usersList} totalUsers={stats.totalUsers} />
               <ActivityFeed activity={stats.recentActivity} />
             </div>
+          </div>
+        )}
+
+        {activeTab === "aicost" && (
+          <div className="animate-fade-in">
+            <AiCostDashboard />
+          </div>
+        )}
+
+        {activeTab === "auditlogs" && (
+          <div className="animate-fade-in">
+            <AuditLogViewerPanel />
           </div>
         )}
 

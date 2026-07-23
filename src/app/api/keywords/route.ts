@@ -119,7 +119,9 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
     const aiResponse = await generateStructuredJson<{ suggestions: SuggestedOpportunity[] }>(
       systemPrompt,
       responseSchema,
-      site.userId
+      site.userId,
+      site.id,
+      "keyword_research"
     );
     return aiResponse.suggestions || [];
   } catch (err) {

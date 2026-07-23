@@ -100,7 +100,8 @@ const businessProfileSchema = {
 export async function analyzeBusinessProfile(
   crawledPages: CrawledPage[],
   siteUrl: string,
-  userId?: string
+  userId?: string,
+  siteId?: string
 ): Promise<BusinessProfile> {
   // 1. Build a token-efficient summary of the crawled site content
   // We prioritize the home page, about page, and services/products pages.
@@ -169,7 +170,9 @@ Extract and return exactly a JSON object matching this schema:
     const profile = await generateStructuredJson<BusinessProfile>(
       prompt,
       businessProfileSchema,
-      userId
+      userId,
+      siteId,
+      "business_profile"
     );
     return profile;
   } catch (error) {

@@ -3,7 +3,6 @@ import * as groqProvider from "./aiProviders/groq";
 import * as openrouterProvider from "./aiProviders/openrouter";
 import { prisma } from "./prisma";
 
-
 export function clearCachedConfig() {
   // Config cache not implemented
 }
@@ -63,7 +62,18 @@ export async function getActiveProviderConfig(): Promise<{ provider: string; isM
   return { provider, isMock };
 }
 
-function logApiUsage(callType: string, success: boolean, provider: string, wasFailover: boolean, userId?: string) {
+function logApiUsage(
+  callType: string,
+  success: boolean,
+  provider: string,
+  wasFailover: boolean,
+  userId?: string,
+  siteId?: string,
+  featureTag?: string,
+  model?: string,
+  inputTokens?: number,
+  outputTokens?: number
+) {
   prisma.apiUsageLog
     .create({
       data: {
@@ -72,7 +82,12 @@ function logApiUsage(callType: string, success: boolean, provider: string, wasFa
         success,
         wasFailover,
         userId: userId || null,
-      },
+        siteId: siteId || null,
+        featureTag: featureTag || null,
+        model: model || null,
+        inputTokens: inputTokens ?? null,
+        outputTokens: outputTokens ?? null,
+      } as any,
     })
     .catch((err) => {
       console.error("[AI Provider] Failed to log API usage:", err);
@@ -83,7 +98,12 @@ function logApiUsage(callType: string, success: boolean, provider: string, wasFa
  * Basic text generation function wrapper.
  * Integrates priority chain failover attempts sequentially.
  */
-export async function generateContent(prompt: string, userId?: string): Promise<string> {
+export async function generateContent(
+  prompt: string,
+  userId?: string,
+  siteId?: string,
+  featureTag?: string
+): Promise<string> {
   const chain = await getProviderPriorityChain();
   const errors: { provider: string; error: string }[] = [];
 
@@ -94,23 +114,34 @@ export async function generateContent(prompt: string, userId?: string): Promise<
     if (isMock) {
       console.log(`[AI Provider] Using mock text generation (Provider: ${provider}).`);
       const result = generateMockText(prompt);
-      logApiUsage("generateContent", false, provider, false, userId);
+      logApiUsage("generateContent", false, provider, false, userId, siteId, featureTag, `${provider}-mock`);
       return result;
     }
 
     try {
-      let result = "";
+      let res: { result: string; model: string; inputTokens?: number; outputTokens?: number };
       if (provider === "groq") {
-        result = await groqProvider.generateContent(prompt);
+        res = await groqProvider.generateContent(prompt);
       } else if (provider === "openrouter") {
-        result = await openrouterProvider.generateContent(prompt);
+        res = await openrouterProvider.generateContent(prompt);
       } else {
-        result = await geminiProvider.generateContent(prompt);
+        res = await geminiProvider.generateContent(prompt);
       }
 
       const wasFailover = i > 0;
-      logApiUsage("generateContent", true, provider, wasFailover, userId);
-      return result;
+      logApiUsage(
+        "generateContent",
+        true,
+        provider,
+        wasFailover,
+        userId,
+        siteId,
+        featureTag,
+        res.model,
+        res.inputTokens,
+        res.outputTokens
+      );
+      return res.result;
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.warn(`[AI Fallback] ${provider} failed: ${errMsg}, trying next in chain...`);
@@ -120,7 +151,7 @@ export async function generateContent(prompt: string, userId?: string): Promise<
 
   const errorMsg = `All AI providers failed. Tried: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`;
   console.error(`[AI Provider] ${errorMsg}`);
-  logApiUsage("generateContent", false, chain[0] || "unknown", false, userId);
+  logApiUsage("generateContent", false, chain[0] || "unknown", false, userId, siteId, featureTag);
   throw new Error(errorMsg);
 }
 
@@ -131,7 +162,9 @@ export async function generateContent(prompt: string, userId?: string): Promise<
 export async function generateStructuredJson<T>(
   prompt: string,
   responseSchema?: Record<string, unknown>,
-  userId?: string
+  userId?: string,
+  siteId?: string,
+  featureTag?: string
 ): Promise<T> {
   const chain = await getProviderPriorityChain();
   const errors: { provider: string; error: string }[] = [];
@@ -143,23 +176,34 @@ export async function generateStructuredJson<T>(
     if (isMock) {
       console.log(`[AI Provider] Using mock JSON generation (Provider: ${provider}).`);
       const result = generateMockJson<T>(prompt);
-      logApiUsage("generateStructuredJson", false, provider, false, userId);
+      logApiUsage("generateStructuredJson", false, provider, false, userId, siteId, featureTag, `${provider}-mock`);
       return result;
     }
 
     try {
-      let result: T;
+      let res: { result: T; model: string; inputTokens?: number; outputTokens?: number };
       if (provider === "groq") {
-        result = await groqProvider.generateStructuredJson<T>(prompt, responseSchema);
+        res = await groqProvider.generateStructuredJson<T>(prompt, responseSchema);
       } else if (provider === "openrouter") {
-        result = await openrouterProvider.generateStructuredJson<T>(prompt, responseSchema);
+        res = await openrouterProvider.generateStructuredJson<T>(prompt, responseSchema);
       } else {
-        result = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
+        res = await geminiProvider.generateStructuredJson<T>(prompt, responseSchema);
       }
 
       const wasFailover = i > 0;
-      logApiUsage("generateStructuredJson", true, provider, wasFailover, userId);
-      return result;
+      logApiUsage(
+        "generateStructuredJson",
+        true,
+        provider,
+        wasFailover,
+        userId,
+        siteId,
+        featureTag,
+        res.model,
+        res.inputTokens,
+        res.outputTokens
+      );
+      return res.result;
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.warn(`[AI Fallback] ${provider} failed: ${errMsg}, trying next in chain...`);
@@ -169,7 +213,7 @@ export async function generateStructuredJson<T>(
 
   const errorMsg = `All AI providers failed. Tried: ${errors.map(e => `${e.provider} (${e.error})`).join(", ")}`;
   console.error(`[AI Provider] ${errorMsg}`);
-  logApiUsage("generateStructuredJson", false, chain[0] || "unknown", false, userId);
+  logApiUsage("generateStructuredJson", false, chain[0] || "unknown", false, userId, siteId, featureTag);
   throw new Error(errorMsg);
 }
 

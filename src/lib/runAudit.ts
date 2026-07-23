@@ -599,7 +599,7 @@ Return the suggestions formatted EXACTLY as a JSON object matching this schema:
         currentPrompt += `\n\n[WARNING] Your previous generation attempt failed validation:\n${failureText}\n\nPlease correct all listed errors and resubmit the complete, corrected JSON. Ensure all constraints (title length, meta length, word count, H1, internal/external links) are fully met.`;
       }
 
-      aiResponse = await generateStructuredJson<AiResponse>(currentPrompt, geminiResponseSchema, userId);
+      aiResponse = await generateStructuredJson<AiResponse>(currentPrompt, geminiResponseSchema, userId, site.id, "seo_audit");
       
       validationFailuresMap = {};
       validationChecksMap = {};
@@ -995,7 +995,7 @@ Provide suggestions as a JSON object matching this schema:
     try {
       const linkingResponse = await generateStructuredJson<{
         suggestions: { fromUrl: string; toUrl: string; anchorText: string; reason: string }[];
-      }>(linkingPrompt, internalLinkingSchema, userId);
+      }>(linkingPrompt, internalLinkingSchema, userId, site.id, "seo_audit");
 
       if (linkingResponse.suggestions && linkingResponse.suggestions.length > 0) {
         for (const sug of linkingResponse.suggestions) {
@@ -1084,6 +1084,17 @@ async function handleAutoApply(
   if (!user) return;
   if (getRiskLevel(item.type) !== "low") return;
   if (!site.wpUrl || !site.wpUsername || !site.wpAppPasswordEncrypted) return;
+
+  // KILLSWITCH-1 Check
+  try {
+    const settings: any = await prisma.appSettings.findFirst({ where: { id: "singleton" } });
+    if (settings?.autoPublishEnabled === false) {
+      console.log(`[Auto-Apply Killswitch] autoPublishEnabled is set to false. Skipping auto-apply for item ${item.id}.`);
+      return;
+    }
+  } catch (err) {
+    console.error("[Auto-Apply Killswitch] Error checking AppSettings:", err);
+  }
 
   const limits = getEffectivePlanLimits(user);
   if (!limits.wpAutoApply) return;

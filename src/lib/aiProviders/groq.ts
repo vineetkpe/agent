@@ -3,7 +3,14 @@
 const apiKey = process.env.GROQ_API_KEY;
 const MODEL_NAME = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-export async function generateContent(prompt: string): Promise<string> {
+export interface ProviderResponse<T> {
+  result: T;
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export async function generateContent(prompt: string): Promise<ProviderResponse<string>> {
   if (!apiKey || apiKey === "mock-groq-key") {
     throw new Error("Groq API key not configured.");
   }
@@ -30,10 +37,19 @@ export async function generateContent(prompt: string): Promise<string> {
   }
 
   const data = await res.json();
-  return data?.choices?.[0]?.message?.content || "";
+  const text = data?.choices?.[0]?.message?.content || "";
+  return {
+    result: text,
+    model: data?.model || MODEL_NAME,
+    inputTokens: data?.usage?.prompt_tokens,
+    outputTokens: data?.usage?.completion_tokens,
+  };
 }
 
-export async function generateStructuredJson<T>(prompt: string, responseSchema?: Record<string, unknown>): Promise<T> {
+export async function generateStructuredJson<T>(
+  prompt: string,
+  responseSchema?: Record<string, unknown>
+): Promise<ProviderResponse<T>> {
   if (!apiKey || apiKey === "mock-groq-key") {
     throw new Error("Groq API key not configured.");
   }
@@ -77,5 +93,10 @@ Respond with ONLY valid JSON. Do NOT include markdown code blocks (e.g. \`\`\`js
     .replace(/```$/, "")
     .trim();
 
-  return JSON.parse(cleanText) as T;
+  return {
+    result: JSON.parse(cleanText) as T,
+    model: data?.model || MODEL_NAME,
+    inputTokens: data?.usage?.prompt_tokens,
+    outputTokens: data?.usage?.completion_tokens,
+  };
 }

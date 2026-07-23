@@ -223,7 +223,7 @@ ${historyText}
 Please reply to the user's latest message as the AI Assistant following the Style Guide. Keep your response concise, clean, professional, and formatted in clean markdown.
 `;
 
-    const reply = await generateContent(systemPrompt, currentUser.id);
+    const reply = await generateContent(systemPrompt, currentUser.id, site?.id, "chat");
 
     // Save assistant's reply to the database
     if (conversation) {

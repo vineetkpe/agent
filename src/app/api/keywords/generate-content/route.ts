@@ -94,7 +94,9 @@ Strict SEO Content Generation Rules:
     const aiResult = await generateStructuredJson<GeneratedArticle>(
       prompt,
       articleResponseSchema,
-      currentUser.id
+      currentUser.id,
+      siteId,
+      "content_generation"
     );
 
     // Validate the generated article against our content validator rules

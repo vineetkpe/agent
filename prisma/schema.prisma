@@ -132,13 +132,23 @@ model AuditItem {
 }
 
 model ApiUsageLog {
-  id        String   @id @default(uuid())
-  provider  String   // e.g. 'gemini'/'openrouter'/'groq'
-  callType  String   // 'generateContent'/'generateStructuredJson'
-  success   Boolean
-  wasFailover Boolean  @default(false)
-  userId    String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  provider    String   // e.g. 'gemini'/'openrouter'/'groq'
+  callType    String   // 'generateContent'/'generateStructuredJson'
+  success     Boolean
+  wasFailover  Boolean  @default(false)
+  userId      String?
+  siteId      String?
+  model       String?
+  inputTokens Int?
+  outputTokens Int?
+  featureTag  String?  // e.g. 'seo_audit'/'chat'/'keyword_research'/'business_profile'/'content_generation'
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([siteId])
+  @@index([featureTag])
+  @@index([createdAt])
 }
 
 model AppSettings {
@@ -146,6 +156,13 @@ model AppSettings {
   aiProvider           String?  // null means fallback to env default
   aiProviderPriority   String?  // comma-separated list, e.g. 'gemini,groq'
   auditCooldownMinutes Int?     // null means fallback to env default
+  autoPublishEnabled   Boolean  @default(true)
+  geminiInputRate      Float?   // $ per million input tokens
+  geminiOutputRate     Float?   // $ per million output tokens
+  groqInputRate        Float?   // $ per million input tokens
+  groqOutputRate       Float?   // $ per million output tokens
+  openrouterInputRate  Float?   // $ per million input tokens
+  openrouterOutputRate Float?   // $ per million output tokens
   updatedAt            DateTime @updatedAt
 }
 
